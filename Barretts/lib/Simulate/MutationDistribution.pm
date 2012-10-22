@@ -35,6 +35,7 @@ sub generate_power_distribution {
     for (my $i=0; $i<$N; $i++) {
 	my $r = rand() or next;
 	my $E = ($r*($p1-$p0)+$p0)**(1/($alpha+1));
+	print $E,"\n";;
 	push @$s,$E;
     }
 }

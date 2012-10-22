@@ -7,8 +7,8 @@ use Simulate::MutationDistribution;
 
 my $md = Simulate::MutationDistribution->new;
 $md->generate_power_distribution();
-$md->generate_mutations();
-$md->print_distribution;
+#$md->generate_mutations();
+#$md->print_distribution;
 
 exit 0;
 
