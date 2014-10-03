@@ -13,7 +13,8 @@ my %Genomes; # { genome_id => $mutation_cnt }
 
 while (<>) {
     chomp;
-    my ($genome_id,$total_mutations,$genes) = /^(\d+): cnt=(\d+), (.*)/;
+    my ($genome_id,$total_mutations,$genes) = /^(\d+): cnt=(-?\d+), (.*)/;
+    $total_mutations = 0 if $total_mutations < 0;
     my @genes = split /\s+/,$genes;
     $Genes{$_}{$genome_id}++ foreach @genes;
     $Genomes{$genome_id} = $total_mutations;
@@ -24,6 +25,17 @@ my $total_genomes = scalar keys %Genomes;
 # now separately calculate positive and negative genomes
 my $stat_pos = Statistics::Descriptive::Full->new();
 my $stat_neg = Statistics::Descriptive::Full->new();
+print join ("\t",
+	    'Gene',
+	    'MutFreq',
+	    'PosMean',
+	    'PosSD',
+	    'PosCount',
+	    'NegMean',
+	    'NegSD',
+	    'NegCount',
+	    'PosNegRatio'),"\n";
+	    
 for my $gene (keys %Genes) {
     my %positive_genomes = map {$_=>1} keys %{$Genes{$gene}};
     my @negative_genomes = grep {!$positive_genomes{$_}} keys %Genomes;

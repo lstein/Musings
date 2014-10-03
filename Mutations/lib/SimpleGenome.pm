@@ -19,9 +19,10 @@ sub new {
     $options{-ns_rate}          ||= 0.03;
     $options{-mutation_mean}    ||= 5_000;
     $options{-mutation_sdev}    ||= 2_000;
-    $options{-drivers}          ||= 6;
+    $options{-drivers}          ||= 6 unless defined $options{-drivers};
     $options{-driver_weight}    ||= 15000;
     $options{-nondriver_weight} ||= 200;
+    $options{-weight_decrease_factor} ||= 1.00001;
     return bless {
 	options => \%options
     },ref $self || $self;
@@ -36,21 +37,18 @@ sub option {
 
 sub mutation_count {
     my $self = shift;
-    return $self->{mutation_count} ||= int $self->rand_normal($self->option('mutation_mean'),$self->option('mutation_sdev'));
-}
-
-sub ns_mutation_count {
-    my $self = shift;
-    return $self->{ns_mutation_count} ||= $self->option('ns_rate') * $self->mutation_count;
+    return int $self->rand_normal($self->option('mutation_mean'),$self->option('mutation_sdev'));
 }
 
 sub mutated_genes {
     my $self = shift;
+    my ($mutation_count,$distribution) = @_;
+
+    my $gene_count    = $self->option('ns_rate') * $mutation_count;
 
     my @mutated_genes;
 
-    my $gene_count = $self->ns_mutation_count;
-    my $distribution = $self->gene_distribution;
+    my $distribution ||= $self->gene_distribution;
     for (1..$gene_count) {
 	my $gene = $self->_weighted_rand($distribution);
 	push @mutated_genes,$gene;
@@ -78,14 +76,13 @@ sub _gene_weights {
     }
 
     my $non_drivers = $self->option('genes') - $drivers;
-    my $step        = $self->option('nondriver_weight')/$non_drivers;
     my $weight      = $self->option('nondriver_weight');
+    my $factor      = $self->option('weight_decrease_factor');
 
     for (1..$non_drivers) {
-	my $w = $weight - ($_-1) * $step;
-	$w    = 0 if $w < 0;
 	my $g = $drivers + $_;
-	$weights{$g} = $w;
+	$weights{$g} = $weight;
+	$weight /= $factor;
     }
     
     return \%weights;
