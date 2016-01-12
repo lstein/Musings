@@ -142,10 +142,10 @@ sub parse_maf {
     my $self = shift;
     my $maf  = shift;
 
-    my $project   = $self->project;
-    my $blacklist = $self->blacklist;
+    my $project_match   = $self->project;
+    my $blacklist       = $self->blacklist;
 
-    $self->setup_caches($maf,$project) or return;
+    $self->setup_caches($maf) or return;
 
     my $SampleMutationCount = $self->sample_mutation_count();     # hashref {sample}       => total_mutation_count
     my $MutatedGene2Sample  = $self->mutated_gene_2_sample();     # hashref {gene}{sample} => true if gene mutated in sample
@@ -173,7 +173,7 @@ sub parse_maf {
 	my ($gene,$variant_type,$sample,$project) = @fields[0,6,13,-2];
 	$gene ||= $anonymous_gene++;  # in case there is no Hugo symbol
 
-	next if $project && $fields[-2] !~ /$project/;
+	next if $project_match && $project !~ /$project_match/;
 	next if $blacklist->{$sample};
 
 	# count all mutations (cached)
@@ -192,7 +192,7 @@ sub parse_maf {
 	push @$MutatedSamples,$sample;    # long list of mutations in samples
     }
 
-    $self->update_touchfile($maf,$project);
+    $self->update_touchfile($maf);
     return;
 }
 
