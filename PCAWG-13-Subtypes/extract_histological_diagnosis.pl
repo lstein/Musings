@@ -35,10 +35,10 @@ my $uuid2barcode    = parse_uuids("$REFERENCE_BASE/".TCGA_UUID2BARCODE);  # $uui
 my $pcawg           = generic_parse($RELEASE_MANIFEST);
 
 # hash indexed by icgc_specimen_id
-my $specimens       = generic_parse("$CLINICAL_BASE/specimen.tsv.gz");
+my $specimen        = generic_parse("$CLINICAL_BASE/specimen.tsv.gz");
 
 # hash indexed by icgc_ssample_id
-my $samples         = generic_parse("$CLINICAL_BASE/sample.tsv.gz");
+my $sample          = generic_parse("$CLINICAL_BASE/sample.tsv.gz");
 
 # hash indexed by icgc_donor_id
 my $donor           = generic_parse("$CLINICAL_BASE/donor.tsv.gz");
@@ -48,8 +48,8 @@ my $donor_therapy   = generic_parse("$CLINICAL_BASE/donor_therapy.tsv.gz");
 
 # to handle TCGA donors/samples/specimens, need to translate from submitter_id to icgc_id
 my $tcga_donor      = translate_tcga_id('donor',   $donor);
-my $tcga_specimen   = translate_tcga_id('specimen',$specimens);
-my $tcga_sample     = translate_tcga_id('sample',  $samples);
+my $tcga_specimen   = translate_tcga_id('specimen',$specimen);
+my $tcga_sample     = translate_tcga_id('sample',  $sample);
 
 print join("\t",qw(donor_unique_id
                    project_code
@@ -81,43 +81,79 @@ print join("\t",qw(donor_unique_id
                    alcohol_history_intensity
                    tumour_percentage_cellularity
                    tumour_level_of_cellularity)),"\n";
+
 # open STDOUT,"| sort";
 
+my %MISSING;
 for my $pcawg_id (keys %$pcawg) {
 
-    my ($donor_id,@specimen_id,@sample_id,$tcga_donor_uuid,@tcga_specimen_uuid,@tcga_sample_uuid);
+    # be careful to reset
+    my ($donor_id,@specimen_id,@sample_id,$tcga_donor_uuid,
+	@tcga_specimen_uuid,@tcga_sample_uuid,@submitter_specimen_id,@submitter_sample_id,
+	@specimen_uuids,@sample_uuids
+	) = ();
 
     # In the PCAWG manifest file, the icgc_donor_id doesn't match what you download
     # from the portal. Instead it is a TCGA UUID, which needs to be mapped onto a TCGA "barcode".
     # The barcode then corresponds to an ICGC submitter_donor_id. Horrible.
     if ($pcawg->{$pcawg_id}{dcc_project_code} =~ /US$/) {
-	my $donor_uuid      = $pcawg->{$pcawg_id}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
-	my @specimen_uuids  = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_specimen_id};
-	my @sample_uuids    = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_sample_id};
+	$tcga_donor_uuid = $pcawg->{$pcawg_id}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
+	@specimen_uuids  = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_specimen_id};
+	@sample_uuids    = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_sample_id};
 
-	$donor_id           = $tcga_donor->{$uuid2barcode->{donor}{$donor_uuid}};
-	@specimen_id        = map {$tcga_specimen->{$uuid2barcode->{specimen}{$_}}} @specimen_uuids;
-	@sample_id          = map {$tcga_sample->{$uuid2barcode->{sample}{$_}}    } @sample_uuids;
+	$donor_id              = $tcga_donor->{$uuid2barcode->{donor}{$tcga_donor_uuid}};
+	@submitter_specimen_id = map {$uuid2barcode->{specimen}{$_}} @specimen_uuids;
+	@submitter_sample_id   = map {$uuid2barcode->{sample}{$_}}   @sample_uuids;
+	@specimen_id           = map {$tcga_specimen->{$_}}          @submitter_specimen_id;
+	@sample_id             = map {$tcga_sample->{$_}  }          @submitter_sample_id;
     }
 
     # this is the ICGC case
     else {
-	$donor_id     = $pcawg->{$pcawg_id}{icgc_donor_id};
-	@specimen_id  = split ',',$pcawg->{$pcawg_id}{tumor_wgs_icgc_specimen_id};
-	@sample_id    = split ',',$pcawg->{$pcawg_id}{tumor_wgs_icgc_sample_id};
+	$donor_id               = $pcawg->{$pcawg_id}{icgc_donor_id};
+	@submitter_specimen_id  = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_specimen_id};
+	@submitter_sample_id    = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_sample_id};
+	@specimen_id            = split ',',$pcawg->{$pcawg_id}{tumor_wgs_icgc_specimen_id};
+	@sample_id              = split ',',$pcawg->{$pcawg_id}{tumor_wgs_icgc_sample_id};
     }
 
     unless ($donor->{$donor_id}) {
 	$MISSING{$donor_id}++;
+	print "# $pcawg_id MISSING FROM DCC\n";
 	next;
     }
 
     # now we can FINALLY print out our data!
-    print join ("\t",
-		$donor_id,
-		
-	),"\n;
+    for (my $i=0;$i<@specimen_id;$i++) {
+	print join ("\t",
+		    $pcawg_id,
+		    $donor->{$donor_id}{project_code},
+		    $donor_id,
+		    $donor->{$donor_id}{submitted_donor_id},
+		    $tcga_donor_uuid,
+		    $specimen_id[$i],
+		    $submitter_specimen_id[$i],
+		    $specimen_uuids[$i],
+		    $sample_id[$i],
+		    $submitter_sample_id[$i],
+		    $sample_uuids[$i],
+		    $donor->{$donor_id}{donor_sex},
+		    $donor->{$donor_id}{donor_vital_status},
+		    histology_fields($specimen->{$specimen_id[$i]}),
+	    ),"\n";
+    }
+}
+close STDOUT;
 
+exit 0;
+
+sub histology_fields {
+    my $specimen = shift;
+    my $tumour_histological_code = $specimen->{tumour_histological_type};
+    my $type                     = $codes->{$tumour_histological_code} || $tumour_histological_code;
+    $type         = lcfirst($type);
+    my $free_text = $tumour_histological_code !~ /^\d+/;
+    return (($free_text ? '' : $tumour_histological_code),$type);
 }
 
 # for my $p (sort keys %found) {
