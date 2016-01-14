@@ -51,7 +51,7 @@ my $tcga_donor      = translate_tcga_id('donor',   $donor);
 my $tcga_specimen   = translate_tcga_id('specimen',$specimen);
 my $tcga_sample     = translate_tcga_id('sample',  $sample);
 
-print join("\t",qw(donor_unique_id
+print '# ',join("\t",qw(donor_unique_id
                    project_code
                    icgc_donor_id
                    submitted_donor_id
@@ -76,13 +76,13 @@ print join("\t",qw(donor_unique_id
                    donor_survival_time
                    donor_interval_of_last_followup
                    tobacco_smoking_history_indicator
-                   tobacco_soking_intensity
+                   tobacco_smoking_intensity
                    alcohol_history
                    alcohol_history_intensity
-                   tumour_percentage_cellularity
-                   tumour_level_of_cellularity)),"\n";
+                   percentage_cellularity
+                   level_of_cellularity)),"\n";
 
-# open STDOUT,"| sort";
+open STDOUT,"| sort";
 
 my %MISSING;
 for my $pcawg_id (keys %$pcawg) {
@@ -90,8 +90,7 @@ for my $pcawg_id (keys %$pcawg) {
     # be careful to reset
     my ($donor_id,@specimen_id,@sample_id,$tcga_donor_uuid,
 	@tcga_specimen_uuid,@tcga_sample_uuid,@submitter_specimen_id,@submitter_sample_id,
-	@specimen_uuids,@sample_uuids
-	) = ();
+	@specimen_uuids,@sample_uuids) = ();
 
     # In the PCAWG manifest file, the icgc_donor_id doesn't match what you download
     # from the portal. Instead it is a TCGA UUID, which needs to be mapped onto a TCGA "barcode".
@@ -119,7 +118,7 @@ for my $pcawg_id (keys %$pcawg) {
 
     unless ($donor->{$donor_id}) {
 	$MISSING{$donor_id}++;
-	print "# $pcawg_id MISSING FROM DCC\n";
+	print "# $pcawg_id\tMISSING FROM DCC\n";
 	next;
     }
 
@@ -140,6 +139,21 @@ for my $pcawg_id (keys %$pcawg) {
 		    $donor->{$donor_id}{donor_sex},
 		    $donor->{$donor_id}{donor_vital_status},
 		    histology_fields($specimen->{$specimen_id[$i]}),
+		    $donor->{$donor_id}{donor_diagnosis_icd10},
+		    $specimen->{$specimen_id[$i]}{specimen_donor_treatment_type},
+		    $donor_therapy->{$donor_id}{first_therapy_type},
+		    $donor_therapy->{$donor_id}{first_therapy_response},
+		    $specimen->{$specimen_id[$i]}{tumour_stage},
+		    $specimen->{$specimen_id[$i]}{tumour_grade},
+		    $donor->{$donor_id}{donor_age_at_diagnosis},
+		    $donor->{$donor_id}{donor_survival_time},
+		    $donor->{$donor_id}{donor_interval_of_last_followup},
+		    $donor_exposure->{$donor_id}{tobacco_smoking_history_indicator},
+		    $donor_exposure->{$donor_id}{tobacco_smoking_intensity},
+		    $donor_exposure->{$donor_id}{alcohol_history},
+		    $donor_exposure->{$donor_id}{alcohol_intensity},
+		    $sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
+		    $sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
 	    ),"\n";
     }
 }
