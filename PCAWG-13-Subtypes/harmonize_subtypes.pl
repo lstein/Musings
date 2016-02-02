@@ -40,6 +40,15 @@ while (<>) {
 	    }
 	}
     }
+
+    # Some basic cleanup of the histological type
+    $fields{tumour_histological_type} =~ s/"//g;
+    $fields{tumour_histological_type} =~ s/^\s+//;
+    $fields{tumour_histological_type} =~ s/\s+$//;
+    $fields{tumour_histological_type} =~ s/\bnos\b/NOS/;
+    $fields{tumour_histological_type} = ucfirst($fields{tumour_histological_type});
+    undef $fields{tumour_histological_type} if $fields{tumour_histological_type} =~ /not available/i;
+
     $_ = join "\t",@fields{@new_field_names};
 } continue {
     print $_,"\n";

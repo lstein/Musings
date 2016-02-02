@@ -6,8 +6,8 @@ use Getopt::Long;
 
 use constant ICD_CODES         => 'sitetype.icdo3.d20150918.csv';    # http://seer.cancer.gov/icd-o-3/
 use constant TCGA_UUID2BARCODE => 'tcga_uuid2barcode.txt';           # From Junjun Zhang, 5 October 2015. Translates TCGA uuids into barcodes
-use constant RELEASE_MANIFEST  => './release_aug2015.v1.tsv';        # https://wiki.oicr.on.ca/display/PANCANCER/Available+PCAWG+Data#AvailablePCAWGData-August2015Dataset
-use constant CLINICAL_BASE     => './October2015_Dataset';
+use constant CLINICAL_BASE     => './February2016_Dataset';
+use constant RELEASE_MANIFEST  => 'pcawg_sample_sheet.tsv';          # http://pancancer.info/gnos_metadata/latest/reports/pcawg_sample_sheet.tsv
 use constant REFERENCE_BASE    => '.';
 
 my ($REFERENCE_BASE,$CLINICAL_BASE,$RELEASE_MANIFEST);
@@ -25,14 +25,15 @@ END
 
 $REFERENCE_BASE   ||= REFERENCE_BASE;
 $CLINICAL_BASE    ||= CLINICAL_BASE;
-$RELEASE_MANIFEST ||= RELEASE_MANIFEST;
+$RELEASE_MANIFEST ||= $CLINICAL_BASE .'/'. RELEASE_MANIFEST;
 
 my $codes           = parse_codes("$REFERENCE_BASE/".ICD_CODES);
 my $uuid2barcode    = parse_uuids("$REFERENCE_BASE/".TCGA_UUID2BARCODE);  # $uuid2barcode->{type}{$uuid}
 
 # hash indexed by PCAWG donor_unique_id
 # note that there can be multiple specimens & samples in each field, separated by commas
-my $pcawg           = generic_parse($RELEASE_MANIFEST);
+#my $pcawg           = generic_parse($RELEASE_MANIFEST);
+my $pcawg            = parse_pcawg($RELEASE_MANIFEST);   # {$donor_id}{$specimen_id}{@fields}
 
 # hash indexed by icgc_specimen_id
 my $specimen        = generic_parse("$CLINICAL_BASE/specimen.tsv.gz");
@@ -82,7 +83,7 @@ print '# ',join("\t",qw(donor_unique_id
                    percentage_cellularity
                    level_of_cellularity)),"\n";
 
-open STDOUT,"| sort";
+# open STDOUT,"| sort";
 
 my %MISSING;
 for my $pcawg_id (keys %$pcawg) {
@@ -92,13 +93,19 @@ for my $pcawg_id (keys %$pcawg) {
 	@tcga_specimen_uuid,@tcga_sample_uuid,@submitter_specimen_id,@submitter_sample_id,
 	@specimen_uuids,@sample_uuids) = ();
 
+    # a little hairy here... we are going for only those specimen types marked "tumour"
+    # which have been sequenced using a WGS strategy.
+    my @sample_ids   = grep {$pcawg->{$pcawg_id}{$_}{dcc_specimen_type} =~ /tumour/i &&
+			     $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
+                            } keys %{$pcawg->{$pcawg_id}};
+
     # In the PCAWG manifest file, the icgc_donor_id doesn't match what you download
     # from the portal. Instead it is a TCGA UUID, which needs to be mapped onto a TCGA "barcode".
     # The barcode then corresponds to an ICGC submitter_donor_id. Horrible.
-    if ($pcawg->{$pcawg_id}{dcc_project_code} =~ /US$/) {
-	$tcga_donor_uuid = $pcawg->{$pcawg_id}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
-	@specimen_uuids  = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_specimen_id};
-	@sample_uuids    = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_sample_id};
+    if ($pcawg->{$pcawg_id}{$sample_ids[0]}{dcc_project_code} =~ /US$/) {
+	$tcga_donor_uuid = $pcawg->{$pcawg_id}{$sample_ids[0]}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
+	@specimen_uuids  =  map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
+	@sample_uuids    =  map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}} @sample_ids;
 
 	$donor_id              = $tcga_donor->{$uuid2barcode->{donor}{$tcga_donor_uuid}};
 	@submitter_specimen_id = map {$uuid2barcode->{specimen}{$_}} @specimen_uuids;
@@ -109,11 +116,11 @@ for my $pcawg_id (keys %$pcawg) {
 
     # this is the ICGC case
     else {
-	$donor_id               = $pcawg->{$pcawg_id}{icgc_donor_id};
-	@submitter_specimen_id  = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_specimen_id};
-	@submitter_sample_id    = split ',',$pcawg->{$pcawg_id}{tumor_wgs_submitter_sample_id};
-	@specimen_id            = split ',',$pcawg->{$pcawg_id}{tumor_wgs_icgc_specimen_id};
-	@sample_id              = split ',',$pcawg->{$pcawg_id}{tumor_wgs_icgc_sample_id};
+	$donor_id               = $pcawg->{$pcawg_id}{$sample_ids[0]}{icgc_donor_id};
+	@submitter_specimen_id  = map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
+	@submitter_sample_id    = map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}  } @sample_ids;
+	@specimen_id            = map {$pcawg->{$pcawg_id}{$_}{'icgc_specimen_id'}     } @sample_ids;
+	@sample_id              = map {$pcawg->{$pcawg_id}{$_}{'icgc_samplen_id'}      } @sample_ids;
     }
 
     unless ($donor->{$donor_id}) {
@@ -222,6 +229,28 @@ sub generic_parse {
 	chomp;
 	my @fields = split "\t";
 	@{$data{$fields[0]}}{@field_labels} = @fields;
+    }
+    close $file;
+    return \%data;
+}
+
+sub parse_pcawg {
+    my $file = shift;
+    my $pipe = $file =~ /\.gz$/ ? "gunzip -c $file |" : $file;
+    open my $f,$pipe or die "$file: $!";
+
+    # get fields on first line
+    chomp (my $line = <$f>);
+    my @field_labels = split "\t",$line;
+
+    # create associative array, indexed by the first field in the line which is some sort of ICGC id.
+    my %data;
+    while (<$f>) {
+	chomp;
+	my %f;
+	@f{@field_labels} = split "\t";
+	my ($donor_unique_id,$icgc_sample_id)    = @f{'donor_unique_id','icgc_sample_id'};
+	$data{$donor_unique_id}{$icgc_sample_id} = \%f;
     }
     close $file;
     return \%data;

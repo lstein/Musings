@@ -77,7 +77,7 @@ sub create_comments {
 	donor_sex                           => "male|female",
 	donor_vital_status                  => "alive|deceased",
 	tumour_histological_code            => "Histological code using ICD-0-3 when available",
-	tumour_histological_type            => "Histological type using free text",
+	tumour_histological_type            => "Histological type, harmonized using ICD-0-3 descriptions, when available",
 	donor_diagnosis_icd10               => "Donor's disease ICD10 code",
 	specimen_donor_treatment_type       => "no treatment|surgery|chemotherapy|radiation|combined chemo+radiation therapy|monoclonal antibodies|other therapy",
 	first_therapy_type                  => "no treatment|surgery|chemotherapy|radiation|combined chemo+radiation therapy|monoclonal antibodies|other therapy",

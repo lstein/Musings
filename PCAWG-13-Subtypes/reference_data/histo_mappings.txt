@@ -1,0 +1,83 @@
+#project	pattern	code	description	comment
+BLCA-US	Papillary	8130/3	Papillary trans. cell carcinoma
+BLCA-US	Non-papillary	8120/3	Transitional cell carcinoma, NOS
+BRCA-US	Medullary Carcinoma	8510/3	Medullary carcinoma, NOS
+BRCA-EU	8507/3	8507/3	Duct micropapillary carcinoma
+BRCA-EU	8022/3	8022/3	Pleiomorphic carcinoma
+BRCA-UK	8507/3	8507/3	Duct micropapillary carcinoma
+BRCA-US	Infiltrating Ductal Carcinoma	8500/3	Infiltrating duct carcinoma, NOS
+BRCA-US	Infiltrating Lobular Carcinoma	8520/3	Lobular carcinoma, NOS
+BRCA-US	Mixed histology	8480/3	Mucinous adenocarcinoma	8260/3 Papillary adenocarcinoma, NOS
+BRCA-US	Ductal/Metaplastic	8500/3	Infiltrating duct carcinoma, NOS
+BRCA-US	Invasive ductal carcinoma with	8500/3	Infiltrating duct carcinoma, NOS
+BRCA-US	mucinous & NOS	8480/3	Mucinous adenocarcinoma
+BRCA-US	Plemomorphic/lobular	8022/3	Pleiomorphic carcinoma
+BTCA-SG	cholangiocarcinoma	8160/3	Cholangiocarcinoma
+BTCA-SG	papillary adenocarcinoma	8260/3	Papillary adenocarcinoma, NOS
+BTCA-SG	papillary carcinoma CCA	8260/3	Papillary adenocarcinoma, NOS
+BTCA-SG	periferic cholangiocarcinoma	8160/3	Cholangiocarcinoma
+BTCA-SG	tubular adenocarcinoma CCA	8160/3	Cholangiocarcinoma
+CESC-US	Cervical Squamous Cell Carcinoma	8070/3	Squamous cell carcinoma, NOS
+CESC-US	Endocervical Type of Adenocarcinoma	8140/3	Adenocarcinoma, NOS
+CMDI-UK		9863/3	Chronic myeloid leukemia, NOS
+COAD-US	Colon Adenocarcinoma	8140/3	Adenocarcinoma, NOS
+COAD-US	Colon Mucinous Adenocarcinoma	8480/3	Mucinous adenocarcinoma
+DLBC-US		9680/3	ML, large B-cell, diffuse
+EOPC-DE		8140/3	Adenocarcinoma, NOS
+GBM-US		9440/3	Glioblastoma, NOS
+HNSC-US		8070/3	Squamous cell carcinoma, NOS
+KICH-US	Kidney Chromophobe, sarcomatoid_features - NO	8317/3	Renal cell carcinoma, chromophobe type
+KICH-US	Kidney Chromophobe, sarcomatoid_features - [Not Available]	8317/3	Renal cell carcinoma, chromophobe type
+KICH-US	Kidney Chromophobe, sarcomatoid_features - [Not Evaluated]	8317/3	Renal cell carcinoma, chromophobe type
+KICH-US	Kidney Chromophobe, sarcomatoid_features - YES	8317/3	Renal cell carcinoma, chromophobe type	Sarcomatoid features present
+KIRC-US		8310/3	Clear cell adenocarcinoma, NOS
+KIRP-US	Kidney Papillary Renal Cell Carcinoma	8050/3	Papillary carcinoma, NOS
+KIRP-US	Kidney Papillary Renal Cell Carcinoma, Type 1	8050/3	Papillary carcinoma, NOS	Type 1 papillary renal cell carcinoma
+KIRP-US	Kidney Papillary Renal Cell Carcinoma, Type 2	8050/3	Papillary carcinoma, NOS	Type 2 papillary renal cell carcinoma
+LAML-KR		9861/3	Acute myeloid leukemia
+LAML-US	Acute Myeloid Leukemia	9861/3	Acute myeloid leukemia
+LGG-US	Oligodendroglioma	9450/3	Oligodendroglioma, NOS
+LIHC-US	Hepatocellular Carcinoma	8170/3	hepatocellular carcinoma, NOS
+LINC-JP	hCC	8170/3	hepatocellular carcinoma, NOS
+LUAD-US	Lung Adenocarcinoma Mixed Subtype	8255/3	Adenocarcinoma with mixed subtypes
+LUAD-US	Lung Adenocarcinoma- Not Otherwise Specified (NOS)	8140/3	Adenocarcinoma, NOS
+LUAD-US	Lung Mucinous Adenocarcinoma	8480/3	Mucinous adenocarcinoma
+LUAD-US	Mucinous (Colloid) Carcinoma	8480/3	Mucinous adenocarcinoma
+LUAD-US	Lung Papillary Adenocarcinoma	8050/3	Papillary carcinoma, NOS
+LUAD-US	Lung Bronchioloalveolar Carcinoma Nonmucinous	8252/3	Bronchiolo-alveolar carcinoma, non-mucinous
+LUSC-US	Lung Basaloid Squamous Cell Carcinoma	8083/3	Basaloid squamous cell carcinoma
+LUSC-US	Lung Squamous Cell Carcinoma- Not Otherwise Specified (NOS)	8070/3	Squamous cell carcinoma, NOS
+MALY-DE	9971/1	9971/1	Post transplant lymphoproliferative disorder, NOS
+MELA-AU		8720/3	Malignant melanoma, NOS
+OV-US		8441/3	serous cystadenocarcinoma, NOS
+PACA-AU	acinar Cell Carcinoma	8550/3	Acinar cell carcinoma
+PACA-AU	adenosquamous carcinoma	8560/3	Adenosquamous carcinoma
+PACA-AU	intraductal Papillary Mucinous Neoplasm with invasion	8453/3	Intraductal papillary-mucinous carcinoma, invasive
+PACA-AU	mucinous Non-cystic carcinoma	8480/3	Mucinous adenocarcinoma
+PACA-AU	pancreatic Ductal Adenocarcinoma	8500/3	Infiltrating duct carcinoma, NOS
+PAEN-AU	poorly differentiated endocrine carcinoma	8246/3	Neuroendocrine carcinoma
+PAEN-AU	well-differentiated endocrine tumor, uncertain behavior	8246/3	Neuroendocrine carcinoma
+PAEN-AU	well-differentiated endocrine tumour, benign behaviour	8246/3	Neuroendocrine carcinoma
+PAEN-AU	well-differentiated Neuroendocrine Tumour, uncertain behaviour	8246/3	Neuroendocrine carcinoma	Well-differentiated endocrine tumor, uncertain behavior
+PRAD-CA	adenocarcinoma	8140/3	Adenocarcinoma, NOS
+PRAD-US	Prostate Adenocarcinoma Acinar Type	8550/3	Acinar cell carcinoma
+READ-US	Rectal Adenocarcinoma	8140/3	Adenocarcinoma, NOS
+READ-US	Rectal Mucinous Adenocarcinoma	8480/3	Mucinous adenocarcinoma"
+STAD-US	"Stomach, Adenocarcinoma, Diffuse Type"	8145/3	Carcinoma, diffuse type
+STAD-US	"Stomach, Adenocarcinoma, Not Otherwise Specified (NOS)"	8140/3	Adenocarcinoma, NOS
+STAD-US	Stomach, Intestinal Adenocarcinoma, Mucinous Type	8480/3	Mucinous adenocarcinoma
+STAD-US	"Stomach, Intestinal Adenocarcinoma, Not Otherwise Specified (NOS)"	8144/3	Adenocarcinoma, intestinal type
+STAD-US	"Stomach, Intestinal Adenocarcinoma, Papillary Type	8050/3	Papillary carcinoma, NOS
+STAD-US	"Stomach, Intestinal Adenocarcinoma, Tubular Type"	8211/3	Tubular adenocarcinoma
+THCA-US	"Other, specify", columnar cell variant	8344/3	Papillary carcinoma, columnar cell
+THCA-US	Thyroid Papillary Carcinoma - Classical/usual	8050/3	Papillary carcinoma, NOS
+THCA-US	Thyroid Papillary Carcinoma - Follicular (>= 99% follicular patterned)	8340/3	Papillary carcinoma, follicular variant
+THCA-US	Thyroid Papillary Carcinoma - Tall Cell (>= 50% tall cell features)	8050/3	Papillary carcinoma, NOS
+UCEC-US	Endometrioid endometrial adenocarcinoma	8380/3	Endometrioid carcinoma
+UCEC-US	Mixed serous and endometrioid	8441/3	Serous cystadenocarcinoma, NOS
+UCEC-US	Serous endometrial adenocarcinoma	8441/3	Serous cystadenocarcinoma, NOS
+
+
+
+
+
