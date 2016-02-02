@@ -45,12 +45,13 @@ print "TOTAL PCAWG SPECIMENS: $total\n";
 print "DONORS IN DCC:         $present ($percent%)\n";
 print "\n";
 
-printf("%-36s %-17s %-17s %-17s\n",'FIELD','PRESENT (%)','INFORMATIVE (%)','COMMENT');
+printf("    %-38s %-15s %-17s %-17s\n",'FIELD','PRESENT (%)','INFORMATIVE (%)','COMMENT');
+my $counter = 1;
 for my $f (@field_names) {
     my $present_pct     = $field_present{$f}/$present*100;
     my $informative_pct = $field_informative{$f}/$present*100;
     my $comment         = $comments->{$f};
-    printf("%-36s %6d (%5.1f%%) %6d (%5.1f%%)     %-50s\n",$f,$field_present{$f},$present_pct,$field_informative{$f},$informative_pct,$comment);
+    printf("%2d. %-36s %6d (%5.1f%%) %6d (%5.1f%%)     %-50s\n",$counter++,$f,$field_present{$f},$present_pct,$field_informative{$f},$informative_pct,$comment);
 }
 print "\n(Percentages given in this table are per donor present in DCC)\n";
 
@@ -93,5 +94,8 @@ sub create_comments {
 	percentage_cellularity              => "Tumour cellularity, as a percentage of nuclei in sample",
 	level_of_cellularity                => "Cellularity range, as XX-XX%",
 	'tcga_expert_re-review'             => "Comments from TCGA pathology expert committee on selected specimens",
+	organ_system                        => "Tumour organ or organ system of origin",
+	tumour_original_histology           => "Verbatim histological description, before attempts at harmonization",
+	tumour_histological_comment         => "Comments on tumour histology from donor source (not expert re-review)",
     };
 }
