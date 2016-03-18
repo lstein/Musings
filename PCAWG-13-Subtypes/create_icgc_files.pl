@@ -1,4 +1,4 @@
-#!/bin/perl
+#!/usr/bin/perl
 
 use strict;
 
@@ -30,6 +30,9 @@ use strict;
 
 # the script pulls the project name from the directory, and concatenates the 
 # "donor", "sample", "specimen", "family" and "exposure" files.
+
+# if there is a file named "pcawg_sample_sheet.tsv" in the PARENT directory, it will be used
+# to populate a mapping between ICGC donor ids and submitter donor ids, which is a GOOD THING
 
 # The raw files have the same format as the output files, except that the order of fields
 # is scrambled, and we have to make the following accomodations:
@@ -112,6 +115,8 @@ my %specimen2donor;
 
 my $directory = shift || '.';
 chdir $directory or die "Couldn't chdir: $!";
+parse_ids('../pcawg_sample_sheet.tsv') if -e '../pcawg_sample_sheet.tsv';
+
 my @projects  = <????-??>;
 for my $project (@projects) {
     write_donors($project);
@@ -123,6 +128,21 @@ for my $project (@projects) {
 }
 
 exit 0;
+
+sub parse_ids {
+    my $file = shift;
+    open my $f,"<$file" or die "$file: $!";
+    chomp(my $fields = <$f>);
+    my @fields = split "\t",$fields;
+    my %f;
+    while (<$f>) {
+	chomp;
+	@f{@fields} = split "\t";
+	$id_cache->{donor}{$f{submitter_donor_id}}       = $f{icgc_donor_id};
+	$id_cache->{specimen}{$f{submitter_specimen_id}} = $f{icgc_specimen_id};
+	$id_cache->{sample}{$f{submitter_sample_id}}     = $f{icgc_sample_id};
+    }
+}
 
 sub get_icgc_id {
     my ($domain,$submitter_id) = @_;
@@ -147,7 +167,7 @@ sub write_donors {
     while (<$cat>) {
 	chomp;
 	next if /^donor_id/;
-	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} split "\t";
+	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} map {trim($_)} split "\t";
 	# jiggery pokery
 	my $donor_id           = get_icgc_id('donor',$f{donor_id});
 	$f{icgc_donor_id}      = $donor_id;
@@ -188,7 +208,7 @@ sub write_specimens {
     while (<$cat>) {
 	chomp;
 	next if /^donor_id/;
-	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} split "\t";
+	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} map {trim($_)} split "\t";
 	# jiggery pokery
 	my $donor_id           = get_icgc_id('donor',   $f{donor_id});
 	my $specimen_id        = get_icgc_id('specimen',$f{specimen_id});
@@ -298,7 +318,7 @@ sub write_samples {
     while (<$cat>) {
 	chomp;
 	next if /^analyzed_sample_id/;
-	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} split "\t";
+	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} map {trim($_)} split "\t";
 	# jiggery pokery
 	my $specimen_id        = get_icgc_id('specimen',$f{specimen_id});
 	my $sample_id          = get_icgc_id('sample',  $f{analyzed_sample_id});
@@ -338,7 +358,7 @@ sub write_family {
     while (<$f>) {
 	chomp;
 	next if /^donor_id/;
-	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} split "\t";
+	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} map {trim($_)} split "\t";
 	# jiggery pokery
 	my $donor_id          = get_icgc_id('donor',  $f{donor_id});
 	
@@ -375,7 +395,7 @@ sub write_exposure {
     while (<$cat>) {
 	chomp;
 	next if /^donor_id/;
-	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} split "\t";
+	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} map {trim($_)} split "\t";
 	# jiggery pokery
 	my $donor_id          = get_icgc_id('donor',  $f{donor_id});
 	
@@ -418,7 +438,7 @@ sub write_therapy {
     while (<$cat>) {
 	chomp;
 	next if /^donor_id/;
-	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} split "\t";
+	@f{@fields} = map {($_==-777 or $_==-888) ? '' : $_} map {trim($_)} split "\t";
 	# jiggery pokery
 	my $donor_id          = get_icgc_id('donor',  $f{donor_id});
 	
@@ -473,4 +493,10 @@ sub cat {
 sub cv {
     my ($hash,$field,$dictionary) = @_;
     $hash->{$field} = $dictionary->{$hash->{$field}};
+}
+
+sub trim {
+    my $f = shift;
+    $f =~ s/^\s+|\s+$//g; 
+    return $f;
 }

@@ -32,7 +32,7 @@ sub parse_tcga {
     $file = "gunzip -c $file | " if $file =~ /\.gz/;
     open my $f,$file or die "$file: $!";
 
-    local $/ = "\r\n";
+#    local $/ = "\r\n";
 
     chomp (my $header = <$f>);
     my @field_names = split "\t",$header;
