@@ -19,7 +19,6 @@ BTCA-SG	periferic cholangiocarcinoma	8160/3	Cholangiocarcinoma
 BTCA-SG	tubular adenocarcinoma CCA	8160/3	Cholangiocarcinoma
 CESC-US	Cervical Squamous Cell Carcinoma	8070/3	Squamous cell carcinoma, NOS
 CESC-US	Endocervical Type of Adenocarcinoma	8140/3	Adenocarcinoma, NOS
-CMDI-UK		9863/3	Chronic myeloid leukemia, NOS
 COAD-US	Colon Adenocarcinoma	8140/3	Adenocarcinoma, NOS
 COAD-US	Colon Mucinous Adenocarcinoma	8480/3	Mucinous adenocarcinoma
 DLBC-US		9680/3	ML, large B-cell, diffuse
@@ -76,8 +75,9 @@ THCA-US	Thyroid Papillary Carcinoma - Tall Cell (>= 50% tall cell features)	8050
 UCEC-US	Endometrioid endometrial adenocarcinoma	8380/3	Endometrioid carcinoma
 UCEC-US	Mixed serous and endometrioid	8441/3	Serous cystadenocarcinoma, NOS
 UCEC-US	Serous endometrial adenocarcinoma	8441/3	Serous cystadenocarcinoma, NOS
-
-
-
-
-
+BOCA-UK	9230/0	9230/0	Chondroblastoma, malignant
+BOCA-UK	9241/0	9241/0	Chondromyxoid fibroma
+SARC-US	Leiomyosarcoma	8890/3	Leiomyosarcoma, NOS
+LIHC-US	Fibrolamellar	8171/3	Hepatocellular carcinoma, fibrolamellar
+SKCM-US	Melanoma	8720/3	Malignant melanoma, NOS
+LIHC-US	Hepatocholangiocarcinoma	8180/3	Comb. hepatocel. carcinoma & cholangiocarcinoma
