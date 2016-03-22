@@ -14,7 +14,7 @@ while (<>) {
     chomp;
     next if /^#/;
     @fields{@fieldnames} = split "\t";
-    my ($organ_system,$tumour_histological_code,$tumour_histological_type,$tumour_type_abbrev,$tumour_germ_layer,,$project) 
+    my ($organ_system,$tumour_histological_code,$tumour_histological_type,$tumour_type_abbrev,$tumour_germ_layer,$project) 
 	= @fields{'organ_system','tumour_histological_code','tumour_histological_type','tumour_type_abbrev','tumour_germ_layer','project_code'};
     die "missing organ system for $_" unless $organ_system;
     next unless $tumour_histological_code;

@@ -8,6 +8,7 @@ my %subtypes;
 chomp (my $header = <>);
 $header =~ s/^#\s+//;
 my @fieldnames = split "\t",$header;
+my $total;
 
 while (<>) {
     my %fields;
@@ -22,6 +23,7 @@ while (<>) {
 #    $tumour_histological_type = ucfirst($tumour_histological_type);
     $organ_system             = substr($organ_system,0,40) if length $organ_system > 40;
     $subtypes{$organ_system}{"$tumour_histological_code $tumour_histological_type"}++;
+    $total++;
 }
 
 for my $o (sort keys %subtypes) {
@@ -29,3 +31,5 @@ for my $o (sort keys %subtypes) {
 	printf("%-40s %-60s %3d\n",$o,$t,$subtypes{$o}{$t});
     }
 }
+
+print "TOTAL=$total\n";

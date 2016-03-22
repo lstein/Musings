@@ -8,7 +8,7 @@ chomp (my $fields = <>);
 $fields =~ s/^\#\s+//;
 my @field_names = split "\t",$fields;
 
-my ($total,%donors,%missing,%field_present,%field_informative);
+my ($total,%donors,%missing,%field_present,%field_informative,%histo_present,%missing_subtype);
 
 my $comments = create_comments();
 
@@ -28,6 +28,8 @@ while (<>) {
     } else {
 	$donors{$fields{'donor_unique_id'}}++;
     }
+    $histo_present{$fields{'donor_unique_id'}}++     if $fields{tumour_histological_code};
+    $missing_subtype{$fields{'icgc_specimen_id'}}++  if !$fields{tumour_histological_code};
     next if $donors{$fields{'donor_unique_id'}} > 1;  # don't overcount donors that have multiple specimens
 
     for my $f (@field_names) {
@@ -39,10 +41,13 @@ while (<>) {
 my $donors  = keys %donors;
 my $present = $donors - keys %missing;
 my $percent = sprintf("%2.1f",$present/$donors*100);
+my $histo   = keys %histo_present;
+my $histop  = sprintf("%2.1f",$histo/$donors*100);
 
 print "TOTAL PCAWG DONORS:    $donors\n";
 print "TOTAL PCAWG SPECIMENS: $total\n";
 print "DONORS IN DCC:         $present ($percent%)\n";
+print "DONORS WITH HISTO:     $histo ($histop%)\n";
 print "\n";
 
 printf("    %-38s %-15s %-17s %-17s\n",'FIELD','PRESENT (%)','INFORMATIVE (%)','COMMENT');
@@ -58,6 +63,10 @@ print "\n(Percentages given in this table are per donor present in DCC)\n";
 print "\n\n";
 print "Missing donors:\n";
 print join "\n",(sort keys %missing),"\n";
+
+print "\n\n";
+print "Subtype information missing from specimen:\n";
+print join "\n",(sort keys %missing_subtype),"\n";
 
 exit 0;
 
