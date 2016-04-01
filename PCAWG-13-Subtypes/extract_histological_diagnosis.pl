@@ -33,12 +33,12 @@ my $uuid2barcode    = parse_uuids("$REFERENCE_BASE/".TCGA_UUID2BARCODE);  # $uui
 # hash indexed by PCAWG donor_unique_id
 # note that there can be multiple specimens & samples in each field, separated by commas
 #my $pcawg           = generic_parse($RELEASE_MANIFEST);
-my $pcawg            = parse_pcawg($RELEASE_MANIFEST);   # {$donor_id}{$specimen_id}{@fields}
+my $pcawg            = parse_pcawg($RELEASE_MANIFEST);   # {$donor_id}{$sample_id}{@fields}
 
 # hash indexed by icgc_specimen_id
 my $specimen        = generic_parse("$CLINICAL_BASE/specimen.tsv.gz");
 
-# hash indexed by icgc_ssample_id
+# hash indexed by icgc_sample_id
 my $sample          = generic_parse("$CLINICAL_BASE/sample.tsv.gz");
 
 # hash indexed by icgc_donor_id
@@ -96,8 +96,8 @@ for my $pcawg_id (keys %$pcawg) {
     # a little hairy here... we are going for only those specimen types marked "tumour"
     # which have been sequenced using a WGS strategy.
     my @sample_ids   = grep {$pcawg->{$pcawg_id}{$_}{dcc_specimen_type} =~ /tumour/i &&
-			     $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
-                            } keys %{$pcawg->{$pcawg_id}};
+				 $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
+    } keys %{$pcawg->{$pcawg_id}};
 
     # In the PCAWG manifest file, the icgc_donor_id doesn't match what you download
     # from the portal. Instead it is a TCGA UUID, which needs to be mapped onto a TCGA "barcode".
@@ -106,7 +106,7 @@ for my $pcawg_id (keys %$pcawg) {
 	$tcga_donor_uuid = $pcawg->{$pcawg_id}{$sample_ids[0]}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
 	@specimen_uuids  =  map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
 	@sample_uuids    =  map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}} @sample_ids;
-
+	
 	$donor_id              = $tcga_donor->{$uuid2barcode->{donor}{$tcga_donor_uuid}};
 	@submitter_specimen_id = map {$uuid2barcode->{specimen}{$_}} @specimen_uuids;
 	@submitter_sample_id   = map {$uuid2barcode->{sample}{$_}}   @sample_uuids;
@@ -128,7 +128,7 @@ for my $pcawg_id (keys %$pcawg) {
 	print "# $pcawg_id\tMISSING FROM DCC\n";
 	next;
     }
-
+    
     # now we can FINALLY print out our data!
     for (my $i=0;$i<@specimen_id;$i++) {
 	print join ("\t",
@@ -249,8 +249,14 @@ sub parse_pcawg {
 	chomp;
 	my %f;
 	@f{@field_labels} = split "\t";
-	my ($donor_unique_id,$icgc_sample_id)    = @f{'donor_unique_id','icgc_sample_id'};
-	$data{$donor_unique_id}{$icgc_sample_id} = \%f;
+	my ($donor_unique_id,$icgc_sample_id)     = @f{'donor_unique_id','icgc_sample_id','aliquot_id'};
+	# hack alert - we don't handle multiple aliquots well; just record multiple library strategy techniques
+	# for use in pattern match in main loop.
+	if ($data{$donor_unique_id}{$icgc_sample_id}) { # duplicate sample, must be due to an additional aliquot
+	    $data{$donor_unique_id}{$icgc_sample_id}{library_strategy} .= " $f{library_strategy}";  
+	} else {
+	    $data{$donor_unique_id}{$icgc_sample_id}  = \%f;
+	}
     }
     close $file;
     return \%data;
