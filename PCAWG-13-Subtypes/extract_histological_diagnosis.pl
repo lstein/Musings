@@ -32,6 +32,7 @@ my $uuid2barcode    = parse_uuids("$REFERENCE_BASE/".TCGA_UUID2BARCODE);  # $uui
 
 # hash indexed by PCAWG donor_unique_id
 # note that there can be multiple specimens & samples in each field, separated by commas
+#my $pcawg           = generic_parse($RELEASE_MANIFEST);
 my $pcawg            = parse_pcawg($RELEASE_MANIFEST);   # {$donor_id}{$sample_id}{@fields}
 
 # hash indexed by icgc_specimen_id
