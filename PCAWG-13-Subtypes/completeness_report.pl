@@ -8,7 +8,7 @@ chomp (my $fields = <>);
 $fields =~ s/^\#\s+//;
 my @field_names = split "\t",$fields;
 
-my ($total,%donors,%missing,%field_present,%field_informative,%histo_present,%missing_subtype);
+my ($total,%donors,%missing,%field_present,%field_informative,%histo_present,%missing_subtype,%specimen_submitter_id,%project,%donor);
 
 my $comments = create_comments();
 
@@ -30,6 +30,10 @@ while (<>) {
     }
     $histo_present{$fields{'donor_unique_id'}}++     if $fields{tumour_histological_code};
     $missing_subtype{$fields{'icgc_specimen_id'}}++  if !$fields{tumour_histological_code};
+    $specimen_submitter_id{$fields{icgc_specimen_id}} = $fields{submitted_specimen_id};
+    $project{$fields{icgc_specimen_id}}               = $fields{project_code};
+    $donor{$fields{icgc_specimen_id}}                 = $fields{submitted_donor_id};
+
     next if $donors{$fields{'donor_unique_id'}} > 1;  # don't overcount donors that have multiple specimens
 
     for my $f (@field_names) {
@@ -66,7 +70,10 @@ print join "\n",(sort keys %missing),"\n";
 
 print "\n\n";
 print "Subtype information missing from specimen:\n";
-print join "\n",(sort keys %missing_subtype),"\n";
+for my $specimen (sort keys %missing_subtype) {
+    my $submitter = $specimen_submitter_id{$specimen};
+    print "$project{$specimen}: $specimen, donor=$donor{$specimen}, specimen=$submitter\n";
+}
 
 exit 0;
 

@@ -176,12 +176,12 @@ sub write_donors {
 	cv(\%f,'donor_sex',           {1=>'male',2=>'female'});
 	cv(\%f,'donor_vital_status',  {1=>'alive',2=>'deceased'});
 	cv(\%f,'disease_status_last_followup',  {1=>'complete remission',2=>'partial_remission',
-						3=>'progression',       4=>'relapse',
-						5=>'stable',            6=>'no evidence of disease'});
-	cv(\%f,'disease_relapse_type',          {1=>'local recurrence',  
-						2=>'distant recurrence/metastasis',
-						3=>'progression (liquid tumours)',   
-						4=>'local recurrence and distant metastasis'
+						 3=>'progression',       4=>'relapse',
+						 5=>'stable',            6=>'no evidence of disease'});
+	cv(\%f,'donor_relapse_type',          {1=>'local recurrence',  
+					       2=>'distant recurrence/metastasis',
+					       3=>'progression (liquid tumours)',   
+					       4=>'local recurrence and distant metastasis'
 	   });
 	cv(\%f,'prior_malignancy',              {1=>'yes',  2=>'no', 3=>'unknown'});
 	cv(\%f,'cancer_history_first_degree_relative', {1=>'yes',  2=>'no', 3=>'unknown'});
