@@ -128,6 +128,12 @@ for my $pcawg_id (keys %$pcawg) {
 	print "# $pcawg_id\tMISSING FROM DCC\n";
 	next;
     }
+
+    unless (@specimen_id) {
+	$MISSING{$donor_id}++;
+	print "# $pcawg_id\t MISSING SPECIMEN ID\n";
+	next;
+    }
     
     # now we can FINALLY print out our data!
     for (my $i=0;$i<@specimen_id;$i++) {
