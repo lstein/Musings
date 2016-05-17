@@ -44,7 +44,12 @@ my $len   = length($key);
 $i        = binsearch {$a cmp substr($b,0,$len)} $key,@lines;
 
 die "$key not found" unless defined $i;
-print $lines[$i],"\n";
+
+# there may be more than one matching read line, but they will be adjacent!
+while (substr($lines[$i],0,$len) eq $key) {
+    print $lines[$i],"\n";
+    $i++;
+}
 
 exit 0;
 
