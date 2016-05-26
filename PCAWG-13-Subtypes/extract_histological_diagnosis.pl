@@ -10,16 +10,19 @@ use constant CLINICAL_BASE     => './February2016_Dataset';
 use constant RELEASE_MANIFEST  => 'pcawg_sample_sheet.tsv';          # http://pancancer.info/gnos_metadata/latest/reports/pcawg_sample_sheet.tsv
 use constant REFERENCE_BASE    => '.';
 
-my ($REFERENCE_BASE,$CLINICAL_BASE,$RELEASE_MANIFEST);
+my ($REFERENCE_BASE,$CLINICAL_BASE,$RELEASE_MANIFEST,$BLACKLIST);
 
 GetOptions('reference=s' => \$REFERENCE_BASE,
            'clinical=s'  => \$CLINICAL_BASE,
-	   'manifest=s'  => \$RELEASE_MANIFEST) or die <<END;
+	   'manifest=s'  => \$RELEASE_MANIFEST,
+	   'blacklist=s' => \$BLACKLIST,
+    ) or die <<END;
 Usage: $0 [options]
   --reference_base  Path to where the reference files (sitetype and tcga uuids) can be found
   --clinical        Path to directory containing unpacked donor files downloaded from DCC portal
                      (must contain sample.tsv.gz, specimen.tsv.gz, donor.tsv.gz, etc)
-  --manifest        Path to manifest.tsv downloaded from PanCancer WIKI
+  --manifest        Path to pcawg_sample_sheet.tsv downloaded from PanCancer WIKI
+  --blacklist       Path to pcawg_sample_sheet.blacklisted_donors.tsv downloaded from PanCancer WIKI
 END
     ;
 
@@ -34,6 +37,7 @@ my $uuid2barcode    = parse_uuids("$REFERENCE_BASE/".TCGA_UUID2BARCODE);  # $uui
 # note that there can be multiple specimens & samples in each field, separated by commas
 #my $pcawg           = generic_parse($RELEASE_MANIFEST);
 my $pcawg            = parse_pcawg($RELEASE_MANIFEST);   # {$donor_id}{$sample_id}{@fields}
+my $blacklist        = parse_pcawg($BLACKLIST);          # {$donor_id}{$sample_id}{@fields}
 
 # hash indexed by icgc_specimen_id
 my $specimen        = generic_parse("$CLINICAL_BASE/specimen.tsv.gz");
@@ -83,94 +87,14 @@ print '# ',join("\t",qw(donor_unique_id
                    percentage_cellularity
                    level_of_cellularity)),"\n";
 
-# open STDOUT,"| sort";
+open SORT,"| sort";
+emit_data(\*SORT,$pcawg,0);
+close SORT;
 
-my %MISSING;
-for my $pcawg_id (keys %$pcawg) {
-
-    # be careful to reset
-    my ($donor_id,@specimen_id,@sample_id,$tcga_donor_uuid,
-	@tcga_specimen_uuid,@tcga_sample_uuid,@submitter_specimen_id,@submitter_sample_id,
-	@specimen_uuids,@sample_uuids) = ();
-
-    # a little hairy here... we are going for only those specimen types marked "tumour"
-    # which have been sequenced using a WGS strategy.
-    my @sample_ids   = grep {$pcawg->{$pcawg_id}{$_}{dcc_specimen_type} =~ /tumour/i &&
-				 $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
-    } keys %{$pcawg->{$pcawg_id}};
-
-    # In the PCAWG manifest file, the icgc_donor_id doesn't match what you download
-    # from the portal. Instead it is a TCGA UUID, which needs to be mapped onto a TCGA "barcode".
-    # The barcode then corresponds to an ICGC submitter_donor_id. Horrible.
-    if ($pcawg->{$pcawg_id}{$sample_ids[0]}{dcc_project_code} =~ /US$/) {
-	$tcga_donor_uuid = $pcawg->{$pcawg_id}{$sample_ids[0]}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
-	@specimen_uuids  =  map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
-	@sample_uuids    =  map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}} @sample_ids;
-	
-	$donor_id              = $tcga_donor->{$uuid2barcode->{donor}{$tcga_donor_uuid}};
-	@submitter_specimen_id = map {$uuid2barcode->{specimen}{$_}} @specimen_uuids;
-	@submitter_sample_id   = map {$uuid2barcode->{sample}{$_}}   @sample_uuids;
-	@specimen_id           = map {$tcga_specimen->{$_}}          @submitter_specimen_id;
-	@sample_id             = map {$tcga_sample->{$_}  }          @submitter_sample_id;
-    }
-
-    # this is the ICGC case
-    else {
-	$donor_id               = $pcawg->{$pcawg_id}{$sample_ids[0]}{icgc_donor_id};
-	@submitter_specimen_id  = map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
-	@submitter_sample_id    = map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}  } @sample_ids;
-	@specimen_id            = map {$pcawg->{$pcawg_id}{$_}{'icgc_specimen_id'}     } @sample_ids;
-	@sample_id              = map {$pcawg->{$pcawg_id}{$_}{'icgc_sample_id'}       } @sample_ids;
-    }
-
-    unless ($donor->{$donor_id}) {
-	$MISSING{$donor_id}++;
-	print "# $pcawg_id\tMISSING FROM DCC\n";
-	next;
-    }
-
-    unless (@specimen_id) {
-	$MISSING{$donor_id}++;
-	print "# $pcawg_id\t MISSING SPECIMEN ID\n";
-	next;
-    }
-    
-    # now we can FINALLY print out our data!
-    for (my $i=0;$i<@specimen_id;$i++) {
-	print join ("\t",
-		    $pcawg_id,
-		    $donor->{$donor_id}{project_code},
-		    $donor_id,
-		    $donor->{$donor_id}{submitted_donor_id},
-		    $tcga_donor_uuid,
-		    $specimen_id[$i],
-		    $submitter_specimen_id[$i],
-		    $specimen_uuids[$i],
-		    $sample_id[$i],
-		    $submitter_sample_id[$i],
-		    $sample_uuids[$i],
-		    $donor->{$donor_id}{donor_sex},
-		    $donor->{$donor_id}{donor_vital_status},
-		    histology_fields($specimen->{$specimen_id[$i]}),
-		    $donor->{$donor_id}{donor_diagnosis_icd10},
-		    $specimen->{$specimen_id[$i]}{specimen_donor_treatment_type},
-		    $donor_therapy->{$donor_id}{first_therapy_type},
-		    $donor_therapy->{$donor_id}{first_therapy_response},
-		    $specimen->{$specimen_id[$i]}{tumour_stage},
-		    $specimen->{$specimen_id[$i]}{tumour_grade},
-		    $donor->{$donor_id}{donor_age_at_diagnosis},
-		    $donor->{$donor_id}{donor_survival_time},
-		    $donor->{$donor_id}{donor_interval_of_last_followup},
-		    $donor_exposure->{$donor_id}{tobacco_smoking_history_indicator},
-		    $donor_exposure->{$donor_id}{tobacco_smoking_intensity},
-		    $donor_exposure->{$donor_id}{alcohol_history},
-		    $donor_exposure->{$donor_id}{alcohol_intensity},
-		    $sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
-		    $sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
-	    ),"\n";
-    }
-}
-close STDOUT;
+# this is causing downstream problems
+# open SORT,"| sort";
+# emit_data(\*SORT,$blacklist,1);
+# close SORT;
 
 exit 0;
 
@@ -181,6 +105,106 @@ sub histology_fields {
     $type         = lcfirst($type);
     my $free_text = $tumour_histological_code !~ /^\d+/;
     return (($free_text ? '' : $tumour_histological_code),$type);
+}
+
+sub emit_data {
+    my ($fh,$pcawg,$is_blacklist) = @_;
+
+    my %MISSING;
+    for my $pcawg_id (keys %$pcawg) {
+
+	# be careful to reset
+	my ($donor_id,@specimen_id,@sample_id,$tcga_donor_uuid,
+	    @tcga_specimen_uuid,@tcga_sample_uuid,@submitter_specimen_id,@submitter_sample_id,
+	    @specimen_uuids,@sample_uuids) = ();
+	
+    # a little hairy here... we are going for only those specimen types marked "tumour"
+	# which have been sequenced using a WGS strategy.
+	my @sample_ids   = grep {$pcawg->{$pcawg_id}{$_}{dcc_specimen_type} =~ /tumour/i &&
+				     $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
+	} keys %{$pcawg->{$pcawg_id}};
+	
+	# In the PCAWG manifest file, the icgc_donor_id doesn't match what you download
+	# from the portal. Instead it is a TCGA UUID, which needs to be mapped onto a TCGA "barcode".
+	# The barcode then corresponds to an ICGC submitter_donor_id. Horrible.
+	if ($pcawg->{$pcawg_id}{$sample_ids[0]}{dcc_project_code} =~ /US$/) {
+	    $tcga_donor_uuid = $pcawg->{$pcawg_id}{$sample_ids[0]}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
+	    @specimen_uuids  =  map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
+	    @sample_uuids    =  map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}} @sample_ids;
+	    
+	    $donor_id              = $tcga_donor->{$uuid2barcode->{donor}{$tcga_donor_uuid}};
+	    @submitter_specimen_id = map {$uuid2barcode->{specimen}{$_}} @specimen_uuids;
+	    @submitter_sample_id   = map {$uuid2barcode->{sample}{$_}}   @sample_uuids;
+	    @specimen_id           = map {$tcga_specimen->{$_}}          @submitter_specimen_id;
+	    @sample_id             = map {$tcga_sample->{$_}  }          @submitter_sample_id;
+	}
+
+	# this is the ICGC case
+	else {
+	    $donor_id               = $pcawg->{$pcawg_id}{$sample_ids[0]}{icgc_donor_id};
+	    @submitter_specimen_id  = map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
+	    @submitter_sample_id    = map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}  } @sample_ids;
+	    @specimen_id            = map {$pcawg->{$pcawg_id}{$_}{'icgc_specimen_id'}     } @sample_ids;
+	    @sample_id              = map {$pcawg->{$pcawg_id}{$_}{'icgc_sample_id'}       } @sample_ids;
+	}
+
+	unless ($donor->{$donor_id}) {
+	    $MISSING{$donor_id}++;
+	    print $fh "# $pcawg_id\tMISSING FROM DCC\n";
+	    next;
+	}
+
+	unless (@specimen_id) {
+	    $MISSING{$donor_id}++;
+	    print $fh "# $pcawg_id\t MISSING SPECIMEN ID\n";
+	    next;
+	}
+
+	if ($is_blacklist) {
+	    print $fh "#BLACKLISTED ";
+	}
+
+    
+	# now we can FINALLY print out our data!
+	for (my $i=0;$i<@specimen_id;$i++) {
+
+	    if ($specimen->{$specimen_id[$i]}{tumour_stage} eq 'TNM') { # ad hoc fix for badness in BRCA-UK data set
+		undef $specimen->{$specimen_id[$i]}{tumour_stage};
+	    }
+
+	    print $fh join ("\t",
+			$pcawg_id,
+			$donor->{$donor_id}{project_code},
+			$donor_id,
+			$donor->{$donor_id}{submitted_donor_id},
+			$tcga_donor_uuid,
+			$specimen_id[$i],
+			$submitter_specimen_id[$i],
+			$specimen_uuids[$i],
+			$sample_id[$i],
+			$submitter_sample_id[$i],
+			$sample_uuids[$i],
+			$donor->{$donor_id}{donor_sex},
+			$donor->{$donor_id}{donor_vital_status},
+			histology_fields($specimen->{$specimen_id[$i]}),
+			$donor->{$donor_id}{donor_diagnosis_icd10},
+			$specimen->{$specimen_id[$i]}{specimen_donor_treatment_type},
+			$donor_therapy->{$donor_id}{first_therapy_type},
+			$donor_therapy->{$donor_id}{first_therapy_response},
+			$specimen->{$specimen_id[$i]}{tumour_stage},
+			$specimen->{$specimen_id[$i]}{tumour_grade},
+			$donor->{$donor_id}{donor_age_at_diagnosis},
+			$donor->{$donor_id}{donor_survival_time},
+			$donor->{$donor_id}{donor_interval_of_last_followup},
+			$donor_exposure->{$donor_id}{tobacco_smoking_history_indicator},
+			$donor_exposure->{$donor_id}{tobacco_smoking_intensity},
+			$donor_exposure->{$donor_id}{alcohol_history},
+			$donor_exposure->{$donor_id}{alcohol_intensity},
+			$sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
+			$sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
+		),"\n";
+	}
+    }
 }
 
 # for my $p (sort keys %found) {

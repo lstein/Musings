@@ -4,14 +4,14 @@ use strict;
 
 use IO::Uncompress::Bunzip2 qw(bunzip2);
 use List::BinarySearch      qw(binsearch_pos binsearch);
-use Storable                qw(fd_retrieve);
 
 use constant TEST_DAM => './test.dam';
 use constant HEADER   => 512;
 
 my $in  = shift || TEST_DAM;
 #my $key = shift || 'NA06984-SRR006041.831209';
-my $key  = shift || 'NA06984-SRR006041.1552758';
+#my $key  = shift || 'NA06984-SRR006041.1552758';
+my $key  = shift || 'NA06984-SRR006041.1184038';
 
 my ($header,$bam_offset,$block_offset,$index_offset);
 
@@ -21,8 +21,8 @@ my ($magic,$bam_offset,$block_offset,$index_offset) = unpack('a4LLL',$header);
 $magic eq 'DAM1' or die "Provided file has wrong magic number. Not a dam file?";
 
 # get the index
-seek($infh,$index_offset,0) or die "Can't seek: $!";
-my $index = fd_retrieve($infh) or die "Can't retrieve index from $in: $!";
+seek($infh,$index_offset,0)  or die "Can't seek: $!";
+my $index = get_index($infh) or die "Can't retrieve index from $in: $!";
 
 # find the first block that might contain the key
 my $i     = binsearch_pos {$a cmp $b->[0]} $key,@$index;
@@ -53,6 +53,18 @@ while (substr($lines[$i],0,$len) eq $key) {
 
 exit 0;
 
+sub get_index {
+    my $in   = shift;
+    my $data = '';
+    do {1} while read($in, $data, 8192, length $data);
+    my $index;
+    bunzip2(\$data,\$index);
+    my @flat = unpack('(Z*N)*',$index);
 
-
-
+    # turn into list of lists
+    my @index;
+    while (my ($key,$offset) = splice(@flat,0,2)) {
+	push @index,[$key,$offset];
+    }
+    return \@index;
+}

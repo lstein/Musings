@@ -2,7 +2,7 @@
 
 use strict;
 use IO::Compress::Bzip2;
-use Storable qw(nstore_fd);
+# use Storable qw(nstore_fd);
 
 # We are going to do a test of the following:
 # 1. Read in a BAM file, sorted by the read name (using system sort).
@@ -30,9 +30,8 @@ my $out = shift || TEST_OUTPUT;
 my ($infh,$outfh);
 
 open $outfh,'>',$out                         or die "$out: $!";
-print $outfh 'DAM1';
-print $outfh pack('LLL',HEADER,0,0);         # offsets to beginning of BAM header data, gzip data, index
-seek($outfh,HEADER,0);                       # start writing at beginning of BAM header area
+print $outfh pack('a4LLL','DAM1',HEADER,0,0); # magic number, offsets to beginning of BAM header data, gzip data, index
+seek($outfh,HEADER,0);                        # start writing at beginning of BAM header area
 
 if ($in =~ /\.bam$/) {
     open $infh,"samtools view $in | sort | " or die "samtools view $in: $!";
@@ -41,7 +40,7 @@ if ($in =~ /\.bam$/) {
 }
 
 my $offset = HEADER;
-my ($header_written,$block_data_offset,$block_buffer,$key,@block_index);
+my ($header_written,$block_data_offset,$block_buffer,$key,$block_index);
 
 while (<$infh>) {
     if (!$header_written) {
@@ -62,7 +61,7 @@ while (<$infh>) {
     $key           = $fields[0] if !defined $key;
 
     if ( ($fields[0] ne $key) && (length($block_buffer) + length($line) > BLOCKSIZE)) {
-	update_index($key,$offset,\@block_index);
+	update_index($key,$offset,\$block_index);
 	write_compressed_block($outfh,$block_buffer);
 	$offset       = tell($outfh);
 	$block_buffer = $line;
@@ -73,38 +72,34 @@ while (<$infh>) {
 }
 
 # last block
-update_index($key,$offset,\@block_index);
+update_index($key,$offset,\$block_index);
 write_compressed_block($outfh,$block_buffer);
 
 # provide dummy key at the very end to enable length retrieval
-update_index('~',tell($outfh),\@block_index);
+update_index('~',tell($outfh),\$block_index);
 
 # $offset now contains the position where the index starts
 $offset = tell($outfh);
 
 # now write index
-write_index($outfh,\@block_index);
+write_compressed_block($outfh,$block_index);
 
 # and update the header
 seek($outfh,4,0);
-print $outfh pack('LLL',HEADER,$block_data_offset,$offset);
-close $outfh;
+print $outfh pack('LLL',HEADER,$block_data_offset,$offset) or die "write of output file failed: $!";
+close $outfh or die "close of output file failed: $!";
 
 exit 0;
 
 sub update_index {
-    my ($key,$offset,$offset_array) = @_;
-    push @$offset_array,[$key,$offset];
+    my ($key,$offset,$index) = @_;
+    $$index .= pack('Z*N',$key,$offset);
 }
 
 sub write_compressed_block {
     my ($outfh,$data) = @_;
     my $compressed_stream = IO::Compress::Bzip2->new($outfh);
-    $compressed_stream->print($data);
-    $compressed_stream->close();
+    $compressed_stream->print($data) or die "write compressed stream failed: $!";
+    $compressed_stream->close()      or die "compression failed: $!";
 }
 
-sub write_index {
-    my ($outfh,$index) = @_;
-    nstore_fd($index,$outfh) or die "store_fd failed: $!";
-}
