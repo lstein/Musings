@@ -7,6 +7,7 @@ use List::BinarySearch      qw(binsearch_pos binsearch);
 
 use constant TEST_DAM => './test.dam';
 use constant HEADER   => 512;
+use constant MAGIC    => 'DAM1';
 
 my $in  = shift || TEST_DAM;
 #my $key = shift || 'NA06984-SRR006041.831209';
@@ -17,8 +18,10 @@ my ($header,$bam_offset,$block_offset,$index_offset);
 
 open my $infh,'<',$in      or die "$in: $!";
 read($infh,$header,HEADER) or die "read: $!";
-my ($magic,$bam_offset,$block_offset,$index_offset) = unpack('a4LLL',$header);
+my ($magic,$bam_offset,$block_offset,$index_offset,$original_path) = unpack('a4LLLZ*',$header);
 $magic eq 'DAM1' or die "Provided file has wrong magic number. Not a dam file?";
+
+print STDERR "Rehydrating file originally derived from $original_path\n";
 
 # get the index
 seek($infh,$index_offset,0)  or die "Can't seek: $!";
