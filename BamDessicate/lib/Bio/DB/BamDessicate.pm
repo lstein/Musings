@@ -19,6 +19,28 @@ sub dessicate {
     my $self   = shift;
     my ($infile,$outfile) = @_;
     $infile && $outfile   or die "usage: \$bd->dessicate(\$sam_or_bamfile_in,\$damfile_out)";
+    my $outfh = $self->create_damfile($outfile);
+    $self->write_dam_header($infh,$outfh);
+
+    # treat bam and sam files differently
+    my $is_bam = $in =~ /\.bam$/;
+
+    # Write SAM header
+    my $infh;
+    if ($is_bam) {
+	$infh = $self->open_bamfile($infile);
+	print $outfh $_ while <$infh>;
+    } else {
+	$infh = $self->open_samfile($infile);
+	while (<$infh>) {
+	    last unless /^\@/;
+	    print $outfh $_;
+	}
+    }
+    close $infh;
+
+    
+
 }
 
 sub hydrate {
@@ -26,5 +48,7 @@ sub hydrate {
     my ($readfile,$damfile) = @_;
     $readfile && $outfile or die "usage: \$bd->hydrate(\$sam_bam_or_fastqfile_in,\$damfile_in,\$bamfile_out)";
 }
+
+
 
 1;
