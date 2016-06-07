@@ -59,33 +59,20 @@ sub fetch_read {
     my $self    = shift;
     my $read_id = shift or die "Usage \$readline = Bio::DB::DamFile->fetch_read(\$read_id)";
 
-    my ($offset,$length) = $self->_lookup_block($read_id) or croak "Read $read_id not found in DB.";
-
-    my $cache = $self->_block_cache;
-    my $lines = $cache->{$offset};
-
-    $self->{cache_stats}{$lines ? 'hits' : 'misses'}++;
-
-    unless ($lines) {
-	my $block = $self->_fetch_block($offset,$length) or croak "Block fetch error while retrieving $length bytes from offset $offset: $!";
-	my $uncompressed;
-	bunzip2(\$block,\$uncompressed);
-	$lines = $cache->{$offset} = $uncompressed;
-    }
-
-    my @lines = split "\n",$lines;
+    my ($block_index) = $self->_lookup_block($read_id)    or croak "Read $read_id not found in DB.";
+    my $lines         = $self->_fetch_block($block_index) or croak "Block fetch error while retrieving block at $block_index: $!";
 
     my $key   = "$read_id\t"; # terminate match at tab
 
     my $len   = length($key);
-    my $i     = binsearch {$a cmp substr($b,0,$len)} $key,@lines;
+    my $i     = binsearch {$a cmp substr($b,0,$len)} $key,@$lines;
 
     croak "Read $read_id not found in DB." unless defined $i;
     
     # there may be more than one matching read line, but they will be adjacent!
     my @matches;
-    while (substr($lines[$i],0,$len) eq $key) {
-	push @matches,$lines[$i++];
+    while (substr($lines->[$i],0,$len) eq $key) {
+	push @matches,$lines->[$i++];
     }
     
     return \@matches;
@@ -138,6 +125,57 @@ sub rehydrate {
     close $outfh or die "error closing $outfile: $!";
 }
 
+# seeks to a named read; can then pull one read at a time quickly
+sub seek_to_read {
+    my $self    = shift;
+    my $read_id = shift or die "Usage \$boolean = Bio::DB::DamFile->seek_to_read(\$read_id)";
+
+    # default to an invalid seek
+    $self->{seek}{block_index} = -1;
+
+    my $block_index = $self->_lookup_block($read_id);
+    defined $block_index or return;
+
+    my $lines       = $self->_fetch_block($block_index);
+
+    my $key         = "$read_id\t"; # terminate match at tab
+    my $len         = length($key);
+    my $read_index  = binsearch {$a cmp substr($b,0,$len)} $key,@$lines;
+
+    defined $read_index or return;
+
+    $self->{seek}{block_index} = $block_index;
+    $self->{seek}{read_index}  = $read_index;
+
+    return 1;
+}
+
+sub next_read {
+    my $self  = shift;
+    my $seek  = $self->{seek} ||= {};
+    $seek->{block_index} ||= 0;
+    $seek->{read_index}  ||= 0;
+
+    if ($seek->{block_index} < 0) {
+	$seek->{block_index} = 0;
+	return;
+    }
+
+    # actually a two-tier cache here, one in memory, and one on disk
+    my $lines = $self->{seek}{lines} ||= $self->_fetch_block($seek->{block_index}) or return;
+    
+    if (@$lines > $seek->{read_index}) {
+	return $lines->[$seek->{read_index}++];
+    }
+
+    # otherwise we get next block
+    $self->{seek}{block_index}++;
+    $self->{seek}{read_index} = 0;
+
+    $lines = $self->{seek}{lines} = $self->_fetch_block($seek->{block_index}) or return;
+    return $lines->[$seek->{read_index}++];
+}
+
 sub _rehydrate_bam {
     my $self = shift;
     my ($infile,$outfh) = @_;
@@ -149,7 +187,7 @@ sub _rehydrate_bam {
 sub _rehydrate_sam {
     my $self = shift;
     my ($infile,$outfh) = @_;
-    open my $infh,"grep -v '@' $infile | sort -k1,1 |" or die "Can't open $infile: $!";
+    open my $infh,"grep -v '\@' $infile | sort -k1,1 |" or die "Can't open $infile: $!";
     warn "Sorting input SAM by read name. This may take a while...\n";
     $self->_rehydrate_sam_fh($infh,$outfh);
 }
@@ -247,22 +285,31 @@ sub _lookup_block {
     return if $i < 0 or $i > $#$index;
 
     $i-- unless $index->[$i][0] eq $key;  # distinguish between an exact match and an insert position
-    my $offset = $index->[$i][1];
-    my $length = $index->[$i+1][1]-$offset;
-
-    return ($offset,$length);
+    return $i;
 }
 
 sub _fetch_block {
     my $self  = shift;
-    my ($offset,$length) = @_;
+    my $i     = shift;
+
+    my $cache = $self->_block_cache;
+    return $cache->{$i} if defined $cache->{$i};
+
+    my $index = $self->_get_read_index;
+    my $offset = $index->[$i][1];
+    my $length = $index->[$i+1][1]-$offset;
+    return unless $length > 0;
+
+    my $fh     = $self->_open_damfile;
 
     my $block;
-    my $fh     = $self->_open_damfile;
-    seek($fh,$offset,0);
+    seek($fh,$offset,0)      or die "seek failed: $!";
     read($fh,$block,$length) or die "read failed: $!";
 
-    return $block;
+    my $uncompressed;
+    bunzip2(\$block,\$uncompressed);
+    my @lines           = split "\n",$uncompressed;
+    return $cache->{$i} = \@lines;
 }
 
 sub _get_read_index {
