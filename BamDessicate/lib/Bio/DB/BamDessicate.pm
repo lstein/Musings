@@ -21,6 +21,8 @@ use constant MAGIC        => 'DAM1';
 use constant BLOCKSIZE    => 1_048_576;   # A megabyte
 
 sub new {
+    my $class = shift;
+    return bless {},ref $class || $class;
 }
 
 sub dessicate {
@@ -45,11 +47,11 @@ sub dessicate {
 
     # now start dessicating blocks
     my $block_start = tell($outfh);
-    my $index = $self->transcribe_blocks($infh,$outfh);
+    my $index       = $self->transcribe_blocks($infh,$outfh);
 
     # now we write out the name index
     my $index_start = tell($outfh);
-    $self->write_dam_index($index,$outfh);
+    $self->write_dam_index($outfh,$index);
 
     # and update the header to indicate correct starting points
     $self->update_dam_header($outfh,$header_start,$block_start,$index_start);
@@ -123,6 +125,7 @@ sub transcribe_blocks {
     my ($infh,$outfh) = @_;
 
     my ($index_id,$block_buffer,$offset,$block_index);
+    $offset = tell($outfh);
 
     while (<$infh>) {
 	next if /^@/; # ignore headers
@@ -137,7 +140,7 @@ sub transcribe_blocks {
 	if ( ($fields[0] ne $index_id) 
 	     && (length($block_buffer) + length($line) > BLOCKSIZE)) {
 
-	    $self->update_dam_index($index_id,$offset,\$block_index);
+	    $self->update_read_index($index_id,$offset,\$block_index);
 	    $self->write_compressed_block($outfh,\$block_buffer);
 	    $offset       = tell($outfh);
 	    $block_buffer = $line;
@@ -159,10 +162,8 @@ sub transcribe_blocks {
 
 sub write_dam_index {
     my $self           = shift;
-    my ($index,$outfh) = @_;
-    my $offset         = tell($outfh);
+    my ($outfh,$index) = @_;
     $self->write_compressed_block($outfh,$index);
-    return $offset;
 }
 
 sub update_dam_header {
@@ -181,6 +182,7 @@ sub update_read_index {
 }
 
 sub write_compressed_block {
+    my $self          = shift;
     my ($outfh,$data) = @_;   # $data is a scalar reference
     my $compressed_stream = IO::Compress::Bzip2->new($outfh);
     $compressed_stream->print($$data) or die "write compressed stream failed: $!";
