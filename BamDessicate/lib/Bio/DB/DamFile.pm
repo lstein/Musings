@@ -141,14 +141,16 @@ sub rehydrate {
 sub _rehydrate_bam {
     my $self = shift;
     my ($infile,$outfh) = @_;
-    open my $infh,"samtools view $infile |" or die "Can't open samtools to read from $infile: $!";
+    open my $infh,"samtools view $infile | sort -k1,1 |" or die "Can't open samtools to read from $infile: $!";
+    warn "Sorting input BAM by read name. This may take a while...\n";
     $self->_rehydrate_sam_fh($infh,$outfh);
 }
 
 sub _rehydrate_sam {
     my $self = shift;
     my ($infile,$outfh) = @_;
-    open my $infh,'<',$infile or die "Can't open $infile: $!";
+    open my $infh,"grep -v '@' $infile | sort -k1,1 |" or die "Can't open $infile: $!";
+    warn "Sorting input SAM by read name. This may take a while...\n";
     $self->_rehydrate_sam_fh($infh,$outfh);
 }
 
