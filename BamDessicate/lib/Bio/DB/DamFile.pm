@@ -3,11 +3,12 @@ package Bio::DB::DamFile;
 use strict;
 
 use Bio::DB::DamFile::Common;
+use Bio::DB::DamFile::Iterator;
 
 use IO::Uncompress::Bunzip2 qw(bunzip2);
 use List::BinarySearch      qw(binsearch_pos binsearch);
 use Carp                    qw(croak);
-use Tie::Cache;   # SHOULD USE Tie::Cache::LRU FOR SPEED
+use Tie::Cache;             # SHOULD USE Tie::Cache::LRU FOR SPEED
 
 sub new {
     my $class    = shift;
@@ -17,8 +18,6 @@ sub new {
 	damfile       => $damfile,
 	header_data   => undef,
 	damfh         => undef,
-	cache_stats   => {hits   => 0,
-			  misses => 0},
 	options       => $options || {},
     },ref $class || $class;
 }
@@ -125,55 +124,15 @@ sub rehydrate {
     close $outfh or die "error closing $outfile: $!";
 }
 
-# seeks to a named read; can then pull one read at a time quickly
-sub seek_to_read {
-    my $self    = shift;
-    my $read_id = shift or die "Usage \$boolean = Bio::DB::DamFile->seek_to_read(\$read_id)";
-
-    # default to an invalid seek
-    $self->{seek}{block_index} = -1;
-
-    my $block_index = $self->_lookup_block($read_id);
-    defined $block_index or return;
-
-    my $lines       = $self->_fetch_block($block_index);
-
-    my $key         = "$read_id\t"; # terminate match at tab
-    my $len         = length($key);
-    my $read_index  = binsearch {$a cmp substr($b,0,$len)} $key,@$lines;
-
-    defined $read_index or return;
-
-    $self->{seek}{block_index} = $block_index;
-    $self->{seek}{read_index}  = $read_index;
-
-    return 1;
+sub read_iterator {
+    my $self = shift;
+    return Bio::DB::DamFile::Iterator->new($self,@_);
 }
 
 sub next_read {
     my $self  = shift;
-    my $seek  = $self->{seek} ||= {};
-    $seek->{block_index} ||= 0;
-    $seek->{read_index}  ||= 0;
-
-    if ($seek->{block_index} < 0) {
-	$seek->{block_index} = 0;
-	return;
-    }
-
-    # actually a two-tier cache here, one in memory, and one on disk
-    my $lines = $self->{seek}{lines} ||= $self->_fetch_block($seek->{block_index}) or return;
-    
-    if (@$lines > $seek->{read_index}) {
-	return $lines->[$seek->{read_index}++];
-    }
-
-    # otherwise we get next block
-    $self->{seek}{block_index}++;
-    $self->{seek}{read_index} = 0;
-
-    $lines = $self->{seek}{lines} = $self->_fetch_block($seek->{block_index}) or return;
-    return $lines->[$seek->{read_index}++];
+    $self->{iterator} ||= $self->read_iterator(@_);
+    return $self->{iterator}->next_read();
 }
 
 sub _rehydrate_bam {
@@ -181,7 +140,7 @@ sub _rehydrate_bam {
     my ($infile,$outfh) = @_;
     open my $infh,"samtools view $infile | sort -k1,1 |" or die "Can't open samtools to read from $infile: $!";
     warn "Sorting input BAM by read name. This may take a while...\n";
-    $self->_rehydrate_sam_fh($infh,$outfh);
+    $self->_rehydrate_stream($infh,$outfh);
 }
 
 sub _rehydrate_sam {
@@ -189,12 +148,14 @@ sub _rehydrate_sam {
     my ($infile,$outfh) = @_;
     open my $infh,"grep -v '\@' $infile | sort -k1,1 |" or die "Can't open $infile: $!";
     warn "Sorting input SAM by read name. This may take a while...\n";
-    $self->_rehydrate_sam_fh($infh,$outfh);
+    $self->_rehydrate_stream($infh,$outfh);
 }
 
 sub _rehydrate_fastq {
     my $self = shift;
     my ($infile,$outfh) = @_;
+
+    die "fastq-based rehydration not yet supported (needs a sorting routine)";
 
     my $infh;
     if ($infile =~ /\.gz$/) {
@@ -216,18 +177,37 @@ sub _rehydrate_fastq {
     close $infh                          or die "close: $!"
 }
 
-sub _rehydrate_sam_fh {
+sub _rehydrate_stream {
     my $self = shift;
-    my ($infh,$outfh) =@_;
-    while (<$infh>) {
-	chomp;
-	next if /^@/; # do not pass through header lines
-	# sequence read
-	my @fields = split "\t";
-	my ($read_id,$dna,$quality) = @fields[0,9,10];
-	$self->_rehydrate_line($outfh,$read_id,$dna,$quality);
-    }
+    my ($infh,$outfh) = @_;
+    $self->reset(); # awkward
 
+    my @sam_fields = ('');
+    my $sam_done;
+
+    while (my $dam_line = $self->next_read) {
+	my @dam_fields = split "\t",$dam_line;
+
+	while (!$sam_done && ($sam_fields[0] lt $dam_fields[0])) { # read from sam file until we match
+	    chomp (my $sam_line = <$infh>);
+	    $sam_done++ unless $sam_line;
+	    @sam_fields = split "\t",$sam_line;
+	    last if $sam_fields[0] ge $dam_fields[0];
+	}
+
+	if ($sam_done) {
+	    # sequence missing
+	    print $outfh join("\t",@dam_fields[0..8],
+			           '*','*',
+			           @dam_fields[11..$#dam_fields]),"\n";
+	} 
+
+	elsif ($dam_fields[0] eq $sam_fields[0]) { #match
+	    print $outfh join("\t",@dam_fields[0..8],
+			           @sam_fields[9,10],
+			           @dam_fields[9..$#dam_fields]),"\n";
+	}
+    }
 }
 
 sub _rehydrate_line {
@@ -240,12 +220,6 @@ sub _rehydrate_line {
 	@fields = split "\t",$line;
 	print $outfh join("\t",@fields[0..8],$dna,$quality,@fields[11..$#fields]),"\n";
     }
-}
-
-
-sub cache_stats {
-    my $self = shift;
-    return $self->{cache_stats};
 }
 
 sub _open_damfile {
