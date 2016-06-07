@@ -1,0 +1,298 @@
+package Bio::DB::DamFile;
+
+use strict;
+
+use Bio::DB::DamFile::Common;
+
+use IO::Uncompress::Bunzip2 qw(bunzip2);
+use List::BinarySearch      qw(binsearch_pos binsearch);
+use Carp                    qw(croak);
+use Tie::Cache;   # SHOULD USE Tie::Cache::LRU FOR SPEED
+
+sub new {
+    my $class    = shift;
+    my $damfile  = shift;
+    my $options  = shift;
+    return bless {
+	damfile       => $damfile,
+	header_data   => undef,
+	damfh         => undef,
+	cache_stats   => {hits   => 0,
+			  misses => 0},
+	options       => $options || {},
+    },ref $class || $class;
+}
+
+sub damfile     { shift->{damfile} }
+sub block_cache_size {
+    my $self = shift;
+    return $self->{options}{cache_size} ||= DEFAULT_BLOCK_CACHE_SIZE;
+}
+sub header_magic  {
+    my $self = shift;
+    $self->{header_data} ||= $self->_get_dam_header;
+    $self->{header_data}{magic};
+}
+
+sub header_offset  {
+    my $self = shift;
+    $self->{header_data} ||= $self->_get_dam_header;
+    $self->{header_data}{header_offset};
+}
+sub block_offset {
+    my $self = shift;
+    $self->{header_data} ||= $self->_get_dam_header;
+    $self->{header_data}{block_offset};
+}
+sub index_offset {
+    my $self = shift;
+    $self->{header_data} ||= $self->_get_dam_header;
+    $self->{header_data}{index_offset};
+}
+sub source_path {
+    my $self = shift;
+    $self->{header_data} ||= $self->_get_dam_header;
+    $self->{header_data}{original_path};
+}
+
+sub fetch_read {
+    my $self    = shift;
+    my $read_id = shift or die "Usage \$readline = Bio::DB::DamFile->fetch_read(\$read_id)";
+
+    my ($offset,$length) = $self->_lookup_block($read_id) or croak "Read $read_id not found in DB.";
+
+    my $cache = $self->_block_cache;
+    my $lines = $cache->{$offset};
+
+    $self->{cache_stats}{$lines ? 'hits' : 'misses'}++;
+
+    unless ($lines) {
+	my $block = $self->_fetch_block($offset,$length) or croak "Block fetch error while retrieving $length bytes from offset $offset: $!";
+	my $uncompressed;
+	bunzip2(\$block,\$uncompressed);
+	$lines = $cache->{$offset} = $uncompressed;
+    }
+
+    my @lines = split "\n",$lines;
+
+    my $key   = "$read_id\t"; # terminate match at tab
+
+    my $len   = length($key);
+    my $i     = binsearch {$a cmp substr($b,0,$len)} $key,@lines;
+
+    croak "Read $read_id not found in DB." unless defined $i;
+    
+    # there may be more than one matching read line, but they will be adjacent!
+    my @matches;
+    while (substr($lines[$i],0,$len) eq $key) {
+	push @matches,$lines[$i++];
+    }
+    
+    return \@matches;
+}
+
+sub dessicate {
+    my $self   = shift;
+    my ($infile,$damfile) = @_;
+    $damfile            ||= eval {$self->damfile};
+    $infile && $damfile   or die "usage: \$bd->dessicate(\$sam_or_bamfile_in,\$damfile_out)";
+
+    eval 'require Bio::DB::DamFile::Creator' 
+	unless Bio::DB::DamFile::Creator->can('new');
+    Bio::DB::DamFile::Creator->new($damfile)->dessicate($infile);
+}
+
+sub rehydrate {
+    my $self   = shift;
+    my ($infile,$outfile) = @_;
+
+    $infile && $outfile or croak "Usage: Bio::DB::DamFile->rehydrate(\$bam_sam_or_fastq_file_in,\$bamfile_out)";
+
+    open my $outfh,"| samtools view -b -S - > $outfile" or die "Can't open samtools pipe to write $outfile";
+
+    # write out the SAM header
+    my $fh = $self->_open_damfile;
+    my $offset = $self->header_offset;
+    my $len    = $self->block_offset - $offset;
+    seek($fh,$self->header_offset,0);
+    my $buffer;
+    read($fh,$buffer,$len) or die "Couldn't read $len header bytes from DAM file at offset $offset";
+    print $outfh $buffer;
+
+    # write out the contents
+    # infile can be any of:
+    # (1) a bam file (.bam)
+    # (2) a sam file (.sam or .tam)
+    # (3) a fastq file (.fastq)
+
+    if ($infile =~ /\.bam$/) {
+	$self->_rehydrate_bam($infile,$outfh);
+    } elsif ($infile =~ /\.[st]am$/) {
+	$self->_rehydrate_sam($infile,$outfh);
+    } elsif ($infile =~ /\.fastq(?:\.gz|\.bz2)?$/) {
+	$self->rehydrate_fastq($infile,$outfh);
+    } else {
+	croak "$infile has an unknown extension (must be one of .bam, .sam, .tam or .fastq)";
+    }
+
+    close $outfh or die "error closing $outfile: $!";
+}
+
+sub _rehydrate_bam {
+    my $self = shift;
+    my ($infile,$outfh) = @_;
+    open my $infh,"samtools view $infile |" or die "Can't open samtools to read from $infile: $!";
+    $self->_rehydrate_sam_fh($infh,$outfh);
+}
+
+sub _rehydrate_sam {
+    my $self = shift;
+    my ($infile,$outfh) = @_;
+    open my $infh,'<',$infile or die "Can't open $infile: $!";
+    $self->_rehydrate_sam_fh($infh,$outfh);
+}
+
+sub _rehydrate_fastq {
+    my $self = shift;
+    my ($infile,$outfh) = @_;
+
+    my $infh;
+    if ($infile =~ /\.gz$/) {
+	open $infh,"gunzip -c $infile |"  or die "gunzip   -c $infile: $!";
+    } elsif ($infile =~ /\.bz2$/) {
+	open $infh,"bunzip2 -c $infile |" or die "bunzip2 -c $infile: $!";
+    } else {
+	open $infh,'<',$infile            or die "failed opening $infile for reading: $!";
+    }
+
+    local $/ = '@';
+    while (<$infh>) {
+	chomp;
+	next unless $_;
+	my ($read_id,$dna,undef,$quality) = split "\n";
+	$self->_hydrate_line($outfh,$read_id,$dna,$quality);
+    }
+
+    close $infh                          or die "close: $!"
+}
+
+sub _rehydrate_sam_fh {
+    my $self = shift;
+    my ($infh,$outfh) =@_;
+    while (<$infh>) {
+	chomp;
+	next if /^@/; # do not pass through header lines
+	# sequence read
+	my @fields = split "\t";
+	my ($read_id,$dna,$quality) = @fields[0,9,10];
+	$self->_rehydrate_line($outfh,$read_id,$dna,$quality);
+    }
+
+}
+
+sub _rehydrate_line {
+    my $self = shift;
+    my ($outfh,$read_id,$dna,$quality) = @_;
+
+    my $lines  = eval{$self->fetch_read($read_id)} or next;
+    my @fields;
+    for my $line (@$lines) {
+	@fields = split "\t",$line;
+	print $outfh join("\t",@fields[0..8],$dna,$quality,@fields[11..$#fields]),"\n";
+    }
+}
+
+
+sub cache_stats {
+    my $self = shift;
+    return $self->{cache_stats};
+}
+
+sub _open_damfile {
+    my $self = shift;
+    return $self->{damfh} 
+       if defined $self->{damfh} && defined fileno($self->{damfh});
+
+    open my $fh,'<',$self->damfile or die $self->damfile,": $!";
+    $self->{damfh} = $fh;
+    
+    return $self->{damfh};
+}
+
+sub _get_dam_header {
+    my $self = shift;
+    my $fh = $self->_open_damfile;
+    my $buffer;
+    seek($fh,0,0);
+    read($fh,$buffer,HEADER) or die "Couldn't read from ",$self->damfile,": $!";
+    my @data = unpack(HEADER_STRUCT,$buffer);
+
+    my %fields;
+    @fields{'magic','header_offset','block_offset','index_offset','original_path'} = @data;
+
+    $fields{magic} eq MAGIC or croak $self->damfile," doesn't have the right magic number";
+    return \%fields;
+}
+
+sub _lookup_block {
+    my $self = shift;
+    my $key  = shift;  # a read id
+
+    my $index = $self->_get_read_index;
+
+    # find the first block that might contain the key
+    my $i     = binsearch_pos {$a cmp $b->[0]} $key,@$index;
+    return if $i < 0 or $i > $#$index;
+
+    $i-- unless $index->[$i][0] eq $key;  # distinguish between an exact match and an insert position
+    my $offset = $index->[$i][1];
+    my $length = $index->[$i+1][1]-$offset;
+
+    return ($offset,$length);
+}
+
+sub _fetch_block {
+    my $self  = shift;
+    my ($offset,$length) = @_;
+
+    my $block;
+    my $fh     = $self->_open_damfile;
+    seek($fh,$offset,0);
+    read($fh,$block,$length) or die "read failed: $!";
+
+    return $block;
+}
+
+sub _get_read_index {
+    my $self = shift;
+    return $self->{read_index} if $self->{read_index};
+
+    my $fh   = $self->_open_damfile;
+    seek($fh,$self->index_offset,0);
+
+    my $data = '';
+    do {1} while read($fh, $data, 8192, length $data);
+
+    my $index;
+    bunzip2(\$data,\$index);
+    my @flat = unpack('(Z*Q)*',$index);
+
+    # turn into list of lists
+    my @index;
+    while (my ($key,$offset) = splice(@flat,0,2)) {
+	push @index,[$key,$offset];
+    }
+    return $self->{read_index} = \@index;
+}
+
+sub _block_cache {
+    my $self = shift;
+
+    return $self->{block_cache} if defined $self->{block_cache};
+
+    my %c;
+    tie %c,'Tie::Cache',{MaxBytes => $self->block_cache_size};
+    return $self->{block_cache} = \%c;
+}
+
+1;
