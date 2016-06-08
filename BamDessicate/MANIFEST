@@ -1,7 +1,6 @@
 bin/dessicate.pl
 bin/hydrate.pl
 Build.PL
-lib/Bio/DB/BamDessicate.pm
 lib/Bio/DB/DamFile.pm
 lib/Bio/DB/DamFile/Common.pm
 lib/Bio/DB/DamFile/Creator.pm

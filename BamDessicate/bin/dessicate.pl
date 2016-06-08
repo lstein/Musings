@@ -10,7 +10,7 @@ my $out = shift;
 $in && $out or die "Usage: dessicate.pl <infile.bam> <outfile.dam>";
 
 my $bd = Bio::DB::DamFile->new();
-$bd->dessicate(TEST_BAM,TEST_OUTPUT);
+$bd->dessicate($in,$out);
 
 exit 0;
 
