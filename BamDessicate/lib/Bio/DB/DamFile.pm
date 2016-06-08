@@ -118,7 +118,7 @@ sub rehydrate {
     } elsif ($infile =~ /\.[st]am$/) {
 	$self->_rehydrate_sam($infile,$outfh);
     } elsif ($infile =~ /\.fastq(?:\.gz|\.bz2)?$/) {
-	$self->rehydrate_fastq($infile,$outfh);
+	$self->_rehydrate_fastq($infile,$outfh);
     } else {
 	croak "$infile has an unknown extension (must be one of .bam, .sam, .tam or .fastq)";
     }
@@ -134,7 +134,9 @@ sub read_iterator {
 sub next_read {
     my $self  = shift;
     $self->{iterator} ||= $self->read_iterator(@_);
-    return $self->{iterator}->next_read();
+    my $read = $self->{iterator}->next_read();
+    undef $self->{iterator} if !defined $read;
+    return $read;
 }
 
 sub _rehydrate_bam {
@@ -157,37 +159,50 @@ sub _rehydrate_fastq {
     my $self = shift;
     my ($infile,$outfh) = @_;
 
-    die "fastq-based rehydration not yet supported (needs a sorting routine)";
+    # need to create a stream of sorted SAM-like data for passing to _rehydrate_stream()
+    my $pid = open(my $infh,"-|") // die "Can't fork!";
 
-    my $infh;
-    if ($infile =~ /\.gz$/) {
-	open $infh,"gunzip -c $infile |"  or die "gunzip   -c $infile: $!";
-    } elsif ($infile =~ /\.bz2$/) {
-	open $infh,"bunzip2 -c $infile |" or die "bunzip2 -c $infile: $!";
-    } else {
-	open $infh,'<',$infile            or die "failed opening $infile for reading: $!";
+    if ($pid) { # in parent process
+	$self->_rehydrate_stream($infh,$outfh);
+	return;
+    } 
+
+    else {  # in child process
+	my $fastq_fh;
+
+	# open appropriate unzipper
+	if ($infile =~ /\.gz$/) {
+	    open $fastq_fh,"gunzip -c $infile |"  or die "gunzip   -c $infile: $!";
+	} elsif ($infile =~ /\.bz2$/) {
+	    open $fastq_fh,"bunzip2 -c $infile |" or die "bunzip2 -c $infile: $!";
+	} else {
+	    open $fastq_fh,'<',$infile            or die "failed opening $infile for reading: $!";
+	}
+	open my $sort_fh,"| sort -k1,1"           or die "failed opening output pipe to sort: $!";
+
+	local $/ = '@';
+	while (<$fastq_fh>) {
+	    chomp;
+	    next unless $_;
+	    my ($read_id,$dna,undef,$quality) = split "\n";
+	    #             field      0        1     2     3     4     5     6     7     8     9    10
+	    print $sort_fh join("\t",$read_id,undef,undef,undef,undef,undef,undef,undef,undef,$dna,$quality),"\n";
+	}
+	close $sort_fh                            or die "An error occurred while closing the sort pipe filehandle: $!";
+	exit 0;
     }
-
-    local $/ = '@';
-    while (<$infh>) {
-	chomp;
-	next unless $_;
-	my ($read_id,$dna,undef,$quality) = split "\n";
-	$self->_hydrate_line($outfh,$read_id,$dna,$quality);
-    }
-
-    close $infh                          or die "close: $!"
 }
 
 sub _rehydrate_stream {
     my $self = shift;
     my ($infh,$outfh) = @_;
-    $self->reset(); # awkward
+
+    my $iterator = $self->read_iterator();
 
     my @sam_fields = ('');
     my $sam_done;
 
-    while (my $dam_line = $self->next_read) {
+    while (my $dam_line = $iterator->next_read) {
 	my @dam_fields = split "\t",$dam_line;
 
 	while (!$sam_done && ($sam_fields[0] lt $dam_fields[0])) { # read from sam file until we match

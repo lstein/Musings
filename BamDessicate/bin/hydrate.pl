@@ -1,16 +1,17 @@
 #!/usr/bin/perl
 
 use strict;
+use lib './lib','../lib';
 use Bio::DB::DamFile;
 
-my $bam_in = shift;
-my $dam_in = shift;
-my $bam_out = shift;
+@ARGV == 3 or die "Usage: hydrate.pl <in.dam> <reads.{sam,bam,fastq}> <out.bam>";
 
-$bam_in && $dam_in && $bam_out or die "Usage: hydrate.pl <in.bam> <in.dam> <out.bam>";
+my $dam_in   = shift;
+my $reads_in = shift;
+my $bam_out  = shift;
 
 my $bd = Bio::DB::DamFile->new($dam_in);
-$bd->rehydrate($bam_in,$bam_out);
+$bd->rehydrate($reads_in,$bam_out);
 
 0;
 
