@@ -10,6 +10,8 @@ use List::BinarySearch      qw(binsearch_pos binsearch);
 use Carp                    qw(croak);
 use Tie::Cache;             # SHOULD USE Tie::Cache::LRU FOR SPEED
 
+our $VERSION = '1.00';
+
 sub new {
     my $class    = shift;
     my $damfile  = shift;
