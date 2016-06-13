@@ -124,7 +124,7 @@ sub transcribe_blocks {
 	next if /^@/; # ignore headers
 
 	my @fields = split "\t";
-	my $line   = join("\t",@fields[0,1,2,3,4,5,6,7,8,11..$#fields]); # everything but the read and quals
+	my $line   = join("\t",@fields[0,1,2,3,4,5,6,7,8,'*','*',11..$#fields]); # everything but the read and quals
 
 	# the key keeps track of the first ID in the block
 	# we constrain IDs to always fall in the same block

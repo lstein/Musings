@@ -1,5 +1,78 @@
 package Bio::DB::DamFile;
 
+our $VERSION = '1.00';
+
+=head1 NAME
+
+Bio::DB::DamFile -- Create and manage dessicated BAM sequence read files
+
+=head1 SYNOPSIS
+
+# Create a new DAM file from a BAM file.  "reads.bam" is the existing BAM
+# file.  "dessicated.dam" is the new dessicated file.  There is
+# typically an 8x reduction in size.
+
+$dam = Bio::DB::DamFile->new;
+$dam->dessicate('reads.bam','dessicated.dam');
+
+# Open an existing DAM file:
+$dam = Bio::DB::DamFile->new('dessicated.dam');
+
+# Restore a BAM file from a DAM file. The source of reads can be a
+# BAM, TAM or FASTQ file. The mapping information from the DAM file is
+# retained.
+# "reads.bam" is a source of read and quality information; can be
+#             BAM, TAM or FASTQ
+# "hydrated.bam" is the reconstituted BAM file
+
+$dam->rehydrate('reads.bam','hydrated.bam')
+
+# Fetch SAM lines one at a time from the DAM file.
+# Reads will come out in alphabetic order by read_id.
+
+while ($sam_line = $dam->next_read) {
+    print $sam_line,"\n";
+}
+
+# More sophisticated: use an iterator to seek into
+# the file at the location of a particular read.
+# Reads will come out in alphabetic order by read_id,
+# starting with the provided read id.
+$iterator = $dam->read_iterator('NA06984-SRR006041.1000244');
+while ($sam_line = $iterator->next_read) {
+    print $sam_line,"\n";
+}
+
+# Return all SAM lines that match a particular id
+$sam_lines = $dam->fetch_read('NA06984-SRR006041.1000244');
+print join ("\n",@$sam_lines),"\n";
+
+# Get the SAM header information
+$header    = $dam->sam_header;
+
+# Get the path to the original BAM file that was used to create the
+# DAM file
+$path      = $dam->source_path;
+
+=head1 DESCRIPTION
+
+This module was created to solve the issue of maintaining multiple
+aligned BAM files from the same set of reads. This happens when a BAM
+file is remapped onto different genome builds or using different
+alignment software/settings. Rather than have multiple copies of the
+same read and quality score information, one wishes to maintain a
+single BAM (or FASTQ) file with the read information, and store the
+alternative alignments in separate data files.
+
+The DAM ("dessicated BAM") format is very simple, and consists of the
+standard SAM header followed by a series of bzip2-compressed chunks of
+SAM (text format) alignment lines from which the read and quality
+score fields have been removed. This is followed by an index
+
+=head1 METHODS
+
+=cut
+
 use strict;
 
 use Bio::DB::DamFile::Common;
@@ -9,8 +82,6 @@ use IO::Uncompress::Bunzip2 qw(bunzip2);
 use List::BinarySearch      qw(binsearch_pos binsearch);
 use Carp                    qw(croak);
 use Tie::Cache;             # SHOULD USE Tie::Cache::LRU FOR SPEED
-
-our $VERSION = '1.00';
 
 sub new {
     my $class    = shift;
@@ -88,6 +159,7 @@ sub dessicate {
     eval 'require Bio::DB::DamFile::Creator' 
 	unless Bio::DB::DamFile::Creator->can('new');
     Bio::DB::DamFile::Creator->new($damfile)->dessicate($infile);
+    $self->{damfile} = $damfile;
 }
 
 sub rehydrate {
@@ -222,20 +294,8 @@ sub _rehydrate_stream {
 	elsif ($dam_fields[0] eq $sam_fields[0]) { #match
 	    print $outfh join("\t",@dam_fields[0..8],
 			           @sam_fields[9,10],
-			           @dam_fields[9..$#dam_fields]),"\n";
+			           @dam_fields[11..$#dam_fields]),"\n";
 	}
-    }
-}
-
-sub _rehydrate_line {
-    my $self = shift;
-    my ($outfh,$read_id,$dna,$quality) = @_;
-
-    my $lines  = eval{$self->fetch_read($read_id)} or next;
-    my @fields;
-    for my $line (@$lines) {
-	@fields = split "\t",$line;
-	print $outfh join("\t",@fields[0..8],$dna,$quality,@fields[11..$#fields]),"\n";
     }
 }
 
@@ -334,5 +394,24 @@ sub _block_cache {
     tie %c,'Tie::Cache',{MaxBytes => $self->block_cache_size};
     return $self->{block_cache} = \%c;
 }
+
+=head1 SEE ALSO
+
+L<Bio::Perl>, L<Bio::DB::Bam>
+
+=head1 AUTHOR
+
+Lincoln Stein E<lt>lincoln.stein@oicr.on.caE<gt>.
+E<lt>lincoln.stein@bmail.comE<gt>
+
+Copyright (c) 2016 Ontario Institute for Cancer Research.
+
+This package and its accompanying libraries are free software; you can
+redistribute it and/or modify it under the terms of the Artistic
+License 2.0, the Apache 2.0 License, or the GNU General Public License
+(version 1 or higher).  Refer to LICENSE for the full license text.
+
+=cut
+
 
 1;
