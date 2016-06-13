@@ -48,11 +48,16 @@ $sam_lines = $dam->fetch_read('NA06984-SRR006041.1000244');
 print join ("\n",@$sam_lines),"\n";
 
 # Get the SAM header information
-$header    = $dam->sam_header;
+$header    = $dam->sam_header;  # BUG - needs to be written
 
-# Get the path to the original BAM file that was used to create the
-# DAM file
-$path      = $dam->source_path;
+# Accessing information in the DAM header
+$magic     = $dam->header_magic;  # DAM magic number (DAM1)
+$path      = $dam->source_path;   # Path to the original BAM file that was used to create the DAM file
+$offset    = $dam->header_offset; # Offset (in bytes) to where the SAM header starts
+$offset    = $dam->block_offset;  # Offset (in bytes) to where the bzip2-compressed alignmenet data starts
+$offset    = $dam->index_offset;  # Offset (in bytes) to where the name-sorted index of reads begins
+
+
 
 =head1 DESCRIPTION
 
@@ -209,6 +214,17 @@ sub next_read {
     my $read = $self->{iterator}->next_read();
     undef $self->{iterator} if !defined $read;
     return $read;
+}
+
+sub sam_header {
+    my $self = shift;
+    my $sam_start = $self->header_offset;
+    my $sam_length= $self->block_offset-$sam_start;
+    my $buffer;
+    my $fh = $self->_open_damfile;
+    seek($fh,$sam_start,0)        or die "Can't seek on dam fh: $!";
+    read($fh,$buffer,$sam_length) or die "Can't read on dam fh: $!";
+    return $buffer;
 }
 
 sub _rehydrate_bam {

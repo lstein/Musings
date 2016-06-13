@@ -9,10 +9,12 @@ sub new {
     my $self          = shift;
     my $damfile       = shift or die "Usage: Bio::DB::DamFile::Iterator->new(\$damfile [,$\starting_read])";
     my $starting_read = shift;
+    my $ending_read   = shift;
     my $object        = bless { damfile     => $damfile,
 				lines       => undef,
 	                        block_index => 0,
-				read_index  => 0
+				read_index  => 0,
+				ending_read => $ending_read,
                               },ref $self || $self;
     $object->seek($starting_read) or croak "Read `$starting_read` not found"
 	if defined $starting_read;
@@ -66,16 +68,22 @@ sub next_read {
     my $lines = $self->{lines} 
             ||= $dam->_fetch_block($self->{block_index}) or return;
     
-    if (@$lines > $self->{read_index}) {
-	return $lines->[$self->{read_index}++];
+    if (@$lines <= $self->{read_index}) { # refresh cache
+	    # otherwise we get next block
+	$self->{block_index}++;
+	$self->{read_index} = 0;
+	$lines   = $self->{lines} = $dam->_fetch_block($self->{block_index}) or return;
     }
 
-    # otherwise we get next block
-    $self->{block_index}++;
-    $self->{read_index} = 0;
-
-    $lines = $self->{lines} = $dam->_fetch_block($self->{block_index}) or return;
-    return $lines->[$self->{read_index}++];
+    my $next = $lines->[$self->{read_index}++];
+    if (defined $self->{ending_read}) {
+	my ($id) = $next =~ /^(\S+)\t/;
+	if ($id gt $self->{ending_read}) {
+	    $self->{block_index} = -1;
+	    return;
+	}
+    }
+    return $next;
 }
 
 sub reset {
