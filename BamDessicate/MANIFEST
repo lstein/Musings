@@ -7,3 +7,5 @@ lib/Bio/DB/DamFile/Creator.pm
 lib/Bio/DB/DamFile/Iterator.pm
 MANIFEST			This list of files
 MANIFEST.SKIP
+META.yml
+META.json
