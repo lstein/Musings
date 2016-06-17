@@ -57,8 +57,6 @@ $offset    = $dam->header_offset; # Offset (in bytes) to where the SAM header st
 $offset    = $dam->block_offset;  # Offset (in bytes) to where the bzip2-compressed alignmenet data starts
 $offset    = $dam->index_offset;  # Offset (in bytes) to where the name-sorted index of reads begins
 
-
-
 =head1 DESCRIPTION
 
 This module was created to solve the issue of maintaining multiple
@@ -71,8 +69,53 @@ alternative alignments in separate data files.
 
 The DAM ("dessicated BAM") format is very simple, and consists of the
 standard SAM header followed by a series of bzip2-compressed chunks of
-SAM (text format) alignment lines from which the read and quality
-score fields have been removed. This is followed by an index
+alpha-sorted SAM (text format) alignment lines from which the read and
+quality score fields have been removed. This is followed by a
+alphabetically-sorted index of the first read name in each block
+followed by the offset to that block. An individual read line can be
+found by performing a binary search on the read name index, fetching
+and uncompressing the corresponding block, and then performing a
+binary search on the SAM lines contained within the uncompressed
+block.
+
+The DAM file is typically reduced by a factor of 6-8 relative to the
+size of the original BAM file, making it an economical alternative to
+storing multiple remapped BAM files.
+
+Here is an ASCII text representation of the DAM file:
+
+ --------------------------------------------------------------------------------------
+ |                       HEADER  (512 bytes)                                          |
+ |DAM1                -- magic number,                                      4 bytes   |
+ |SAM_header_offset   -- byte position of the start of the SAM header,      16 bytes  |
+ |block_offset        -- byte position of the first compressed block,       16 bytes  |
+ |index_offset        -- byte position of the start of the read name index, 16 bytes  |
+ |path_name           -- full path to the source BAM/SAM file                variable |
+ |                        (this is a zero-terminated string)                          |
+ --------------------------------------------------------------------------------------
+ |                      SAM HEADER (variable length)                                  |
+ | Uncompressed text version of the SAM/BAM header                                    |
+ --------------------------------------------------------------------------------------
+ |  BLOCK 1 (variable length) -bzip2 compressed SAM lines, newline terminated,        |
+ |                              up to 1 MB in length prior to compression.            |
+ --------------------------------------------------------------------------------------
+ |  BLOCK 2 (variable length)                                                         |
+ --------------------------------------------------------------------------------------
+ ~
+ --------------------------------------------------------------------------------------
+ |  BLOCK N (variable length)                                                         |
+ --------------------------------------------------------------------------------------
+ |  READ Index (variable length) -- 
+              bzip2-compressed data. When uncompressed looks like this:               |  
+ | ReadName1\0Offset
+ | ReadName2\0Offset
+ |...
+ | ReadNameN\Offset
+ |
+ | ReadName is a null terminated string. Offset is the position of the compressed block
+ | that begins with the ReadName SAM line. Offset is 8 bytes in length.
+ --------------------------------------------------------------------------------------
+ 
 
 =head1 METHODS
 
@@ -88,6 +131,35 @@ use List::BinarySearch      qw(binsearch_pos binsearch);
 use Carp                    qw(croak);
 use Tie::Cache;             # SHOULD USE Tie::Cache::LRU FOR SPEED
 
+=head2 $dam = Bio::DB::DamFile->new(['path_to_damfile'] [,\%options])
+
+This is the constructor for the class. When called without arguments
+it can be used to create a new DAM file using the dessicate() method:
+
+  my $dam = Bio::DB::DamFile->new();
+  $dam->dessicate('input.bam','output.dam');
+
+This will create the dessicated BAM file, "output.dam", and then
+open up the DamFile for reading and further manipulation.
+
+Alternatively, when called with the path to an existing .dam file, the
+method will open it for reading:
+
+ my $dam = Bio::DB::DamFile->new('/path/to/file.dam');
+
+The optional second argument is a hashref to a series of named
+options. Currently only one option, 'cache_size' is recognized:
+
+ $dam = Bio::DB::DamFile->new('/path/to/file.dam',{cache_size => 1_048_576_000})
+
+This controls the size of the least-recently-used cache of
+uncompressed SAM data blocks. Roughly 200 data blocks can be held in
+memory. For some access patterns (fetching reads that are close
+together alphabetically), performance may be affected by the cache
+size, but in most cases it won't make a difference.
+
+=cut
+
 sub new {
     my $class    = shift;
     my $damfile  = shift;
@@ -100,72 +172,174 @@ sub new {
     },ref $class || $class;
 }
 
+=head2 $file = $dam->damfile
+
+Read-only accessor that returns the path to the .dam file that was
+passed to new().
+
+=cut
+
 sub damfile     { shift->{damfile} }
+
+=head2 $cach_size = $dam->block_cache_size
+
+Read-only accessor that returns the size of the LRU cache in which
+uncompressed blocks are stored.
+
+=cut
+
 sub block_cache_size {
     my $self = shift;
     return $self->{options}{cache_size} ||= DEFAULT_BLOCK_CACHE_SIZE;
 }
+
+=head2 $magic = $dam->header_magic
+
+Returns the "magic number" that begins the header of the .dam file.
+
+=cut
+
 sub header_magic  {
     my $self = shift;
     $self->{header_data} ||= $self->_get_dam_header;
     $self->{header_data}{magic};
 }
 
+=head2 $bytes = $dam->header_offset
+
+Returns the number of bytes from the beginning of the file to the
+beginning of the (uncompressed) SAM header data.
+
+=cut
+
 sub header_offset  {
     my $self = shift;
     $self->{header_data} ||= $self->_get_dam_header;
     $self->{header_data}{header_offset};
 }
+
+=head2 $bytes = $dam->block_offset
+
+Returns the number of bytes from the beginning of the file to the
+beginning of the compressed read data.
+
+=cut
+
+
 sub block_offset {
     my $self = shift;
     $self->{header_data} ||= $self->_get_dam_header;
     $self->{header_data}{block_offset};
 }
+
+=head2 $bytes = $dam->index_offset
+
+Returns the number of bytes from the beginning of the file to the
+beginning of the compressed read index data.
+
+=cut
+
 sub index_offset {
     my $self = shift;
     $self->{header_data} ||= $self->_get_dam_header;
     $self->{header_data}{index_offset};
 }
+
+=head2 $path = $dam->source_path
+
+Returns the absolute path to the source BAM/SAM file from which the
+.dam file was derived.
+
+=cut
+
 sub source_path {
     my $self = shift;
     $self->{header_data} ||= $self->_get_dam_header;
     $self->{header_data}{original_path};
 }
 
-sub fetch_read {
-    my $self    = shift;
-    my $read_id = shift or die "Usage \$readline = Bio::DB::DamFile->fetch_read(\$read_id)";
+=head2 $header = $dam->read_header
 
-    my ($block_index) = $self->_lookup_block($read_id)    or croak "Read $read_id not found in DB.";
-    my $lines         = $self->_fetch_block($block_index) or croak "Block fetch error while retrieving block at $block_index: $!";
+This method returns the entire SAM header as a string. You must split
+and parse it yourself:
 
-    my $key   = "$read_id\t"; # terminate match at tab
-
-    my $len   = length($key);
-    my $i     = binsearch {$a cmp substr($b,0,$len)} $key,@$lines;
-
-    croak "Read $read_id not found in DB." unless defined $i;
-    
-    # there may be more than one matching read line, but they will be adjacent!
-    my @matches;
-    while (substr($lines->[$i],0,$len) eq $key) {
-	push @matches,$lines->[$i++];
+    my $header  = $dam->read_header;
+    my @entries = split "\n",$h;
+    for my $l (@entries) {
+       my ($tag,@fields) = split "\t",$l;
+       # now do something
     }
-    
-    return \@matches;
+
+=cut
+
+sub sam_header {
+    my $self = shift;
+    my $sam_start = $self->header_offset;
+    my $sam_length= $self->block_offset-$sam_start;
+    my $buffer;
+    my $fh = $self->_open_damfile;
+    seek($fh,$sam_start,0)        or die "Can't seek on dam fh: $!";
+    read($fh,$buffer,$sam_length) or die "Can't read on dam fh: $!";
+    return $buffer;
 }
+
+=head2 $dam->dessicate('in.bam','out.dam')
+
+The dessicate() method is used to create a .dam file from an input BAM
+or SAM file. It takes two arguments: the path to the input BAM (or
+SAM) file, and the path to the output .dam file. On success, it will
+return the Bio::DB::DamFile object attached to the newly-created .dam
+file.
+
+It can be called as a class method like so:
+
+  $dam = Bio::DB::DamFile->dessicate('in.bam','out.dam')
+
+The input file can be a compressed or uncompressed .sam file, or a
+.bam file.
+
+Internally, the method uses Bio::DB::DamFile::Creator to do the dirty
+work by making this call:
+
+     Bio::DB::DamFile::Creator->new('out.bam')->dessicate('in.bam');
+
+=cut
 
 sub dessicate {
     my $self   = shift;
     my ($infile,$damfile) = @_;
-    $damfile            ||= eval {$self->damfile};
+    my $obj = ref $self ? $self : $self->new();
+    $damfile            ||= eval {$obj->damfile};
     $infile && $damfile   or die "usage: \$bd->dessicate(\$sam_or_bamfile_in,\$damfile_out)";
 
     eval 'require Bio::DB::DamFile::Creator' 
 	unless Bio::DB::DamFile::Creator->can('new');
     Bio::DB::DamFile::Creator->new($damfile)->dessicate($infile);
-    $self->{damfile} = $damfile;
+    $obj->{damfile} = $damfile;
+    return $obj;
 }
+
+=head2 $dam->rehydrate('in.bam','out.bam')
+
+The rehydrate() method takes the mapping information in its associated
+.dam file, adds in read and quality score information from a provided
+BAM, SAM or FASTQ file, and produces a BAM file that is equivalent to
+the original.
+
+The first argument is a BAM, SAM or FASTQ file that contains read and
+quality score information. The SAM and FASTQ files may be compressed
+or uncompressed. The second argument is the destination BAM file.
+
+Here is an example of roundtripping from BAM to DAM to BAM again:
+
+    my $dam = Bio::DB::DamFile->dessicate('original.bam','test.dam');
+    $dam->rehydrate('original.bam','output.bam');
+
+This will create a file "output.bam" that contains the same
+information as "original.bam". The dessicated data will be in
+"test.dam".
+
+=cut
 
 sub rehydrate {
     my $self   = shift;
@@ -203,10 +377,40 @@ sub rehydrate {
     close $outfh or die "error closing $outfile: $!";
 }
 
-sub read_iterator {
-    my $self = shift;
-    return Bio::DB::DamFile::Iterator->new($self,@_);
-}
+=head2 $read = $dam->next_read(['starting_read'] [,'ending_read'])
+
+Called repeatedly, the next_read() method will return an
+alphabetically-sorted list of the SAM read lines in the attached .dam
+file. You may optionally provide the ID(s) of the read(s) to start and
+end at. When no more reads are available, the method returns undef.
+
+This code fragment iterates through all reads in the file:
+
+  while ( my $read = $dam->next_read() ) {
+        my @fields = split "\t",$r;
+        print "read id = $fields[0], reference chromosome = $fields[2]\n";
+  }
+
+
+This code fragment iterates through all the reads in the file,
+starting with the read named "na12345" (inclusive):
+
+  while ( my $read = $dam->next_read('na12345') ) {
+        my @fields = split "\t",$r;
+        print "read id = $fields[0], reference chromosome = $fields[2]\n";
+  }
+
+And this fragment starts at na12345 and ends at na90000 (inclusive):
+
+  while ( my $read = $dam->next_read('na12345','na90000') ) {
+        my @fields = split "\t",$r;
+        print "read id = $fields[0], reference chromosome = $fields[2]\n";
+  }
+
+If the start and/or end read are not present in the .dam file, then
+iteration will span the alphabetic range defined by the read names.
+
+=cut
 
 sub next_read {
     my $self  = shift;
@@ -216,15 +420,71 @@ sub next_read {
     return $read;
 }
 
-sub sam_header {
+=head2 $iterator = $dam->read_iterator(['starting_read'] [,'ending_read'])
+
+The read_iterator() method operates similarly to next_read() except
+that it returns an intermediate object, the
+Bio::DB::DamFile::Iterator. From this you can call next_read()
+repeatedly to retrieve all, or a range of, reads in the file. The main
+advantage of this method over calling next_read() directly is that you
+can set up multiple simultaneous iterators to return reads across
+different alphabetic ranges.  Example:
+
+ my $iterator = $dam->read_iterator('na12345','na90000');
+ while (my $read = $iterator->next_read()) {
+      # do something
+ }
+
+=cut
+
+sub read_iterator {
     my $self = shift;
-    my $sam_start = $self->header_offset;
-    my $sam_length= $self->block_offset-$sam_start;
-    my $buffer;
-    my $fh = $self->_open_damfile;
-    seek($fh,$sam_start,0)        or die "Can't seek on dam fh: $!";
-    read($fh,$buffer,$sam_length) or die "Can't read on dam fh: $!";
-    return $buffer;
+    return Bio::DB::DamFile::Iterator->new($self,@_);
+}
+
+=head2 $read_lines = $dam->fetch_read('read_id')
+
+This method takes a read id and returns a reference to an array of all
+the SAM read lines that match. If the read ID is not found in the .dam
+file, then this method will throw an exception. You may wish to put it
+inside an eval{}:
+
+ my $reads = eval {$dam->fetch_read('ABC')} // croak "read ABC not found";
+ for my $r (@$reads) {
+    my @fields = split "\t",$r;
+    print "read id = $fields[0], reference chromosome = $fields[2]\n";
+ }
+
+Note that fetch_read() causes a binary search lookup on the block
+index, followed by a binary search on the uncompressed block. An
+internal least-recently-used cache speeds up access, but it will only
+be effective if you are accessing the reads in alphabetic or
+near-alphabetic order. Consider using next_read() or a read iterator
+instead.
+
+=cut
+
+sub fetch_read {
+    my $self    = shift;
+    my $read_id = shift or die "Usage \$readline = Bio::DB::DamFile->fetch_read(\$read_id)";
+
+    my ($block_index) = $self->_lookup_block($read_id)    or croak "Read $read_id not found in DB.";
+    my $lines         = $self->_fetch_block($block_index) or croak "Block fetch error while retrieving block at $block_index: $!";
+
+    my $key   = "$read_id\t"; # terminate match at tab
+
+    my $len   = length($key);
+    my $i     = binsearch {$a cmp substr($b,0,$len)} $key,@$lines;
+
+    croak "Read $read_id not found in DB." unless defined $i;
+    
+    # there may be more than one matching read line, but they will be adjacent!
+    my @matches;
+    while (substr($lines->[$i],0,$len) eq $key) {
+	push @matches,$lines->[$i++];
+    }
+    
+    return \@matches;
 }
 
 sub _rehydrate_bam {

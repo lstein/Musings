@@ -6,8 +6,8 @@ our @EXPORT = qw(HEADER HEADER_STRUCT MAGIC BLOCKSIZE DEFAULT_BLOCK_CACHE_SIZE);
 
 # header format:
 #   4 bytes   -- magic number 'DAM1'
-#   8 bytes   -- offset to beginning of BAM header data
-#   8 bytes   -- offset to beginning of gzip block data
+#   8 bytes   -- offset to beginning of SAM header data
+#   8 bytes   -- offset to beginning of bunzip2 block data
 #   8 bytes   -- offset to beginning of read name index
 #   N+1 bytes -- full path to original BAM/SAM file, zero terminated string
 #   512-(36+N+1) -- reserved for future expansion

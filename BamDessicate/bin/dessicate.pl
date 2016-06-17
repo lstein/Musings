@@ -24,8 +24,7 @@ my $out = shift;
 
 $in && $out or die "Usage: dessicate.pl <infile.{bam,tam}> <outfile.dam>";
 
-my $bd = Bio::DB::DamFile->new();
-$bd->dessicate($in,$out);
+my $bd = Bio::DB::DamFile->dessicate($in,$out);
 
 exit 0;
 
