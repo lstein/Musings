@@ -132,5 +132,6 @@ level_of_cellularity
 tcga_expert_re-review
 tumour_histological_comment
 tumour_original_histology
+donor_wgs_white_black_gray
 );
 }

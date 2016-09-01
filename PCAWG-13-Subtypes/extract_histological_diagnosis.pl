@@ -22,7 +22,6 @@ Usage: $0 [options]
   --clinical        Path to directory containing unpacked donor files downloaded from DCC portal
                      (must contain sample.tsv.gz, specimen.tsv.gz, donor.tsv.gz, etc)
   --manifest        Path to pcawg_sample_sheet.tsv downloaded from PanCancer WIKI
-  --blacklist       Path to pcawg_sample_sheet.blacklisted_donors.tsv downloaded from PanCancer WIKI
 END
     ;
 
@@ -37,7 +36,6 @@ my $uuid2barcode    = parse_uuids("$REFERENCE_BASE/".TCGA_UUID2BARCODE);  # $uui
 # note that there can be multiple specimens & samples in each field, separated by commas
 #my $pcawg           = generic_parse($RELEASE_MANIFEST);
 my $pcawg            = parse_pcawg($RELEASE_MANIFEST);   # {$donor_id}{$sample_id}{@fields}
-my $blacklist        = parse_pcawg($BLACKLIST);          # {$donor_id}{$sample_id}{@fields}
 
 # hash indexed by icgc_specimen_id
 my $specimen        = generic_parse("$CLINICAL_BASE/specimen.tsv.gz");
@@ -85,7 +83,9 @@ print '# ',join("\t",qw(donor_unique_id
                    alcohol_history
                    alcohol_history_intensity
                    percentage_cellularity
-                   level_of_cellularity)),"\n";
+                   level_of_cellularity
+                   donor_wgs_white_black_gray)
+    ),"\n";
 
 open SORT,"| sort";
 emit_data(\*SORT,$pcawg,0);
@@ -108,7 +108,7 @@ sub histology_fields {
 }
 
 sub emit_data {
-    my ($fh,$pcawg,$is_blacklist) = @_;
+    my ($fh,$pcawg) = @_;
 
     my %MISSING;
     for my $pcawg_id (keys %$pcawg) {
@@ -118,7 +118,7 @@ sub emit_data {
 	    @tcga_specimen_uuid,@tcga_sample_uuid,@submitter_specimen_id,@submitter_sample_id,
 	    @specimen_uuids,@sample_uuids) = ();
 	
-    # a little hairy here... we are going for only those specimen types marked "tumour"
+	# a little hairy here... we are going for only those specimen types marked "tumour"
 	# which have been sequenced using a WGS strategy.
 	my @sample_ids   = grep {$pcawg->{$pcawg_id}{$_}{dcc_specimen_type} =~ /tumour/i &&
 				     $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
@@ -160,11 +160,6 @@ sub emit_data {
 	    next;
 	}
 
-	if ($is_blacklist) {
-	    print $fh "#BLACKLISTED ";
-	}
-
-    
 	# now we can FINALLY print out our data!
 	for (my $i=0;$i<@specimen_id;$i++) {
 
@@ -202,6 +197,7 @@ sub emit_data {
 			$donor_exposure->{$donor_id}{alcohol_intensity},
 			$sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
 			$sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
+   		        $pcawg->{$pcawg_id}{$sample_id[$i]}{donor_wgs_white_black_gray},
 		),"\n";
 	}
     }

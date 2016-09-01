@@ -113,5 +113,6 @@ sub create_comments {
 	organ_system                        => "Tumour organ or organ system of origin",
 	tumour_original_histology           => "Verbatim histological description, before attempts at harmonization",
 	tumour_histological_comment         => "Comments on tumour histology from donor source (not expert re-review)",
+	donor_wgs_white_black_gray          => "Whitelist|Blacklist|Graylist",
     };
 }
