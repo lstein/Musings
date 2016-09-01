@@ -1,8 +1,9 @@
 #!/usr/bin/perl
 
 use strict;
-use constant HISTO => 'pcawg_specimen_histology_May2016_v2.tsv';
 use constant PAM50 => 'ICGC.BRCA.TCGA.PAM50.txt';
+
+my $histo = shift;
 
 # slurp in the PAM50s:
 my %pam50; # indexed by submitted_specimen_id
@@ -26,7 +27,7 @@ my @output_fields = qw(icgc_specimen_id
                            submitted_donor_id
                            tcga_donor_uuid);
 
-open $f,'<',HISTO or die $!;
+open $f,'<',$histo or die $!;
 chomp (my $header = <$f>);
 $header           =~ s/^#\s*//;
 my @field_names   = split "\t",$header;
