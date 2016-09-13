@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# report on the completeness of the various fields
+# report on the completeness of the various fields in the pcawg_donors_clinical field
 use strict;
 
 # get fields
@@ -8,7 +8,7 @@ chomp (my $fields = <>);
 $fields =~ s/^\#\s+//;
 my @field_names = split "\t",$fields;
 
-my ($total,%donors,%missing,%field_present,%field_informative,%histo_present,%missing_subtype,%specimen_submitter_id,%project,%donor);
+my ($total,%donors,%field_present,%field_informative,%excluded_donors,%graylist_donors);
 
 my $comments = create_comments();
 
@@ -19,22 +19,11 @@ while (<>) {
     my %fields;
     @fields{@field_names} = split "\t";
 
-    if (/MISSING FROM DCC/) {
-	my ($id) = /^\#\s*(\S+)/;
-	next unless $id;
-	$donors{$id}++;
-	$missing{$id}++;
-	next;
-    } else {
-	$donors{$fields{'donor_unique_id'}}++;
-    }
-    $histo_present{$fields{'donor_unique_id'}}++     if $fields{tumour_histological_code};
-    $missing_subtype{$fields{'icgc_specimen_id'}}++  if !$fields{tumour_histological_code};
-    $specimen_submitter_id{$fields{icgc_specimen_id}} = $fields{submitted_specimen_id};
-    $project{$fields{icgc_specimen_id}}               = $fields{project_code};
-    $donor{$fields{icgc_specimen_id}}                 = $fields{submitted_donor_id};
+    $donors         {$fields{icgc_donor_id}}++;
+    $excluded_donors{$fields{icgc_donor_id}}++ if $fields{donor_wgs_included_excluded} eq 'Excluded';
+    $graylist_donors{$fields{icgc_donor_id}}++ if $fields{donor_wgs_included_excluded} eq 'GrayList';
 
-    next if $donors{$fields{'donor_unique_id'}} > 1;  # don't overcount donors that have multiple specimens
+    next if $fields{donor_wgs_included_excluded} eq 'Excluded';
 
     for my $f (@field_names) {
 	$field_present{$f}++      if $fields{$f} =~ /\S/;
@@ -42,38 +31,28 @@ while (<>) {
     }
 }
 
-my $donors  = keys %donors;
-my $present = $donors - keys %missing;
-my $percent = sprintf("%2.1f",$present/$donors*100);
-my $histo   = keys %histo_present;
-my $histop  = sprintf("%2.1f",$histo/$donors*100);
+my $donors          = keys %donors;
+my $included_donors = keys(%donors) - keys(%excluded_donors) - keys(%graylist_donors);
+my $non_excluded    = $included_donors + keys %graylist_donors;
 
-print "TOTAL PCAWG DONORS:    $donors\n";
-print "TOTAL PCAWG SPECIMENS: $total\n";
-print "DONORS IN DCC:         $present ($percent%)\n";
-print "DONORS WITH HISTO:     $histo ($histop%)\n";
-print "\n";
+printf "TOTAL PCAWG DONORS:        %5d\n",scalar(keys %donors);
+printf "TOTAL INCLUDED DONORS:     %5d\n",$included_donors;
+printf "TOTAL GRAYLISTED DONORS:   %5d\n",scalar(keys %graylist_donors);
+printf "TOTAL EXCLUDED DONORS:     %5d\n",scalar(keys %excluded_donors);
+printf "\n";
+printf "TOTAL NON-EXCLUDED DONORS: %5d\n",$non_excluded;
+printf "\n";
 
 printf("    %-38s %-15s %-17s %-17s\n",'FIELD','PRESENT (%)','INFORMATIVE (%)','COMMENT');
 my $counter = 1;
 for my $f (@field_names) {
-    my $present_pct     = $field_present{$f}/$present*100;
-    my $informative_pct = $field_informative{$f}/$present*100;
+    my $present_pct     = $field_present{$f}/$non_excluded*100;
+    my $informative_pct = $field_informative{$f}/$non_excluded*100;
     my $comment         = $comments->{$f};
     printf("%2d. %-36s %6d (%5.1f%%) %6d (%5.1f%%)     %-50s\n",$counter++,$f,$field_present{$f},$present_pct,$field_informative{$f},$informative_pct,$comment);
 }
-print "\n(Percentages given in this table are per donor present in DCC)\n";
 
-print "\n\n";
-print "Missing donors:\n";
-print join "\n",(sort keys %missing),"\n";
-
-print "\n\n";
-print "Subtype information missing from specimen:\n";
-for my $specimen (sort keys %missing_subtype) {
-    my $submitter = $specimen_submitter_id{$specimen};
-    print "$project{$specimen}: $specimen, donor=$donor{$specimen}, specimen=$submitter\n";
-}
+print "(Denominator is non-excluded donors)\n";
 
 exit 0;
 

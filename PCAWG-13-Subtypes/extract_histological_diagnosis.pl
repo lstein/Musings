@@ -84,7 +84,8 @@ print '# ',join("\t",qw(donor_unique_id
                    alcohol_history_intensity
                    percentage_cellularity
                    level_of_cellularity
-                   donor_wgs_included_excluded)
+                   donor_wgs_included_excluded
+                   specimen_library_strategy)
     ),"\n";
 
 open SORT,"| sort";
@@ -203,6 +204,7 @@ sub emit_data {
 			$sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
 			$sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
 			$included_list,
+			$pcawg->{$pcawg_id}{$sample_id[$i]}{library_strategy}
 		),"\n";
 	}
     }
@@ -284,7 +286,7 @@ sub parse_pcawg {
 	# hack alert - we don't handle multiple aliquots well; just record multiple library strategy techniques
 	# for use in pattern match in main loop.
 	if ($data{$donor_unique_id}{$icgc_sample_id}) { # duplicate sample, must be due to an additional aliquot
-	    $data{$donor_unique_id}{$icgc_sample_id}{library_strategy} .= " $f{library_strategy}";  
+	    $data{$donor_unique_id}{$icgc_sample_id}{library_strategy} .= "+$f{library_strategy}";  
 	} else {
 	    $data{$donor_unique_id}{$icgc_sample_id}  = \%f;
 	}

@@ -71,6 +71,7 @@ my @specimen_fields = qw(
     tumour_histological_comment
     specimen_donor_treatment_type
     donor_wgs_included_excluded
+    specimen_library_strategy
 );
 
 my $url      = CONSOLIDATION_SPREADSHEET;

@@ -133,5 +133,6 @@ tcga_expert_re-review
 tumour_histological_comment
 tumour_original_histology
 donor_wgs_included_excluded
+specimen_library_strategy
 );
 }
