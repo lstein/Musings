@@ -84,7 +84,8 @@ print '# ',join("\t",qw(donor_unique_id
                    alcohol_history_intensity
                    percentage_cellularity
                    level_of_cellularity
-                   donor_wgs_white_black_gray)
+                   donor_wgs_white_black_gray
+                   specimen_library_strategy)
     ),"\n";
 
 open SORT,"| sort";
@@ -198,6 +199,7 @@ sub emit_data {
 			$sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
 			$sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
    		        $pcawg->{$pcawg_id}{$sample_id[$i]}{donor_wgs_white_black_gray},
+			$pcawg->{$pcawg_id}{$sample_id[$i]}{library_strategy}
 		),"\n";
 	}
     }
