@@ -26,16 +26,19 @@ while (<>) {
     @fields{@field_names} = split "\t";
     next if $fields{histology_abbreviation};
 
-    my $patch = $patch{$fields{project_code}} or next;
-
-    @fields{qw(organ_system 
+    if (my $patch = $patch{$fields{project_code}}) {
+	
+	@fields{qw(organ_system 
                histology_abbreviation
                histology_tier1	
                histology_tier2	
                histology_tier3	
                histology_tier4	
                tumour_histological_code)} = @$patch;
-    $fields{tumour_histological_comment} .= 'WARNING: Tumour histology inferred from project name. Not known to be confirmed by path review.';
+	$fields{tumour_histological_comment} .= 'WARNING: Tumour histology inferred from project name. Not known to be confirmed by path review.';
+    } else {
+	$fields{donor_wgs_white_black_gray} = 'Blacklist';
+    }
 
     $_ = join("\t",@fields{@field_names}),"\n";
 }

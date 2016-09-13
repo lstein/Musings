@@ -119,9 +119,9 @@ sub emit_data {
 	    @specimen_uuids,@sample_uuids) = ();
 	
 	# a little hairy here... we are going for only those specimen types marked "tumour"
-	# which have been sequenced using a WGS strategy.
+	# which have been sequenced using a WGS or RNA-seq strategy.
 	my @sample_ids   = grep {$pcawg->{$pcawg_id}{$_}{dcc_specimen_type} =~ /tumour/i &&
-				     $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS/
+				     $pcawg->{$pcawg_id}{$_}{library_strategy}  =~ /WGS|RNA-Seq/
 	} keys %{$pcawg->{$pcawg_id}};
 	
 	# In the PCAWG manifest file, the icgc_donor_id doesn't match what you download

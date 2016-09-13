@@ -13,6 +13,7 @@ while (<>) {
     chomp;
     my %f;
     @f{@field_names} = split "\t";
+    next if $f{'donor_wgs_white_black_gray'} eq 'Blacklist';
     my $organ_system = $f{organ_system};
     my $project_code = $f{project_code};
     my $tier1        = $f{histology_tier1};
