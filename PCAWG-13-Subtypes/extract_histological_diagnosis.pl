@@ -194,7 +194,7 @@ sub emit_data {
 			$donor_exposure->{$donor_id}{tobacco_smoking_history_indicator},
 			$donor_exposure->{$donor_id}{tobacco_smoking_intensity},
 			$donor_exposure->{$donor_id}{alcohol_history},
-			$donor_exposure->{$donor_id}{alcohol_intensity},
+			$donor_exposure->{$donor_id}{alcohol_history_intensity},
 			$sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
 			$sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
    		        $pcawg->{$pcawg_id}{$sample_id[$i]}{donor_wgs_white_black_gray},
