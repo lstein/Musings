@@ -37,7 +37,7 @@ while (<>) {
                tumour_histological_code)} = @$patch;
 	$fields{tumour_histological_comment} .= 'WARNING: Tumour histology inferred from project name. Not known to be confirmed by path review.';
     } else {
-	$fields{donor_wgs_white_black_gray} = 'Blacklist';
+	$fields{donor_wgs_included_excluded} = 'Excluded';
     }
 
     $_ = join("\t",@fields{@field_names}),"\n";

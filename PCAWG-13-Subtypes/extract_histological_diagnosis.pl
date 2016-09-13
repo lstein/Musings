@@ -84,7 +84,7 @@ print '# ',join("\t",qw(donor_unique_id
                    alcohol_history_intensity
                    percentage_cellularity
                    level_of_cellularity
-                   donor_wgs_white_black_gray)
+                   donor_wgs_included_excluded)
     ),"\n";
 
 open SORT,"| sort";
@@ -167,6 +167,11 @@ sub emit_data {
 		undef $specimen->{$specimen_id[$i]}{tumour_stage};
 	    }
 
+	    my $blacklist = $pcawg->{$pcawg_id}{$sample_id[$i]}{donor_wgs_white_black_gray};
+	    my $included_list = $blacklist =~ /Black/i ? 'Excluded'
+                               :$blacklist =~ /Gray/i  ? 'GrayList'
+			       :'Included';
+	    
 	    print $fh join ("\t",
 			$pcawg_id,
 			$donor->{$donor_id}{project_code},
@@ -197,7 +202,7 @@ sub emit_data {
 			$donor_exposure->{$donor_id}{alcohol_history_intensity},
 			$sample->{$sample_id[$i]}{percentage_cellularity} || $specimen->{$specimen_id[$i]}{percentage_cellularity},
 			$sample->{$sample_id[$i]}{level_of_cellularity} || $specimen->{$specimen_id[$i]}{level_of_cellularity},
-   		        $pcawg->{$pcawg_id}{$sample_id[$i]}{donor_wgs_white_black_gray},
+			$included_list,
 		),"\n";
 	}
     }

@@ -14,7 +14,7 @@ my $histo           = parse_histo (HISTO_MAPPINGS);  # {$project}{$pattern}{'cod
 
 # we expect the merged subtypes file on STDIN
 chomp(my $topline = <>);
-$topline =~ s/^#\s+//;
+$topline =~ s/^#\s*//;
 my @field_names = split "\t",$topline;
 
 print '# ',join("\t",@new_field_names),"\n";
@@ -132,6 +132,6 @@ level_of_cellularity
 tcga_expert_re-review
 tumour_histological_comment
 tumour_original_histology
-donor_wgs_white_black_gray
+donor_wgs_included_excluded
 );
 }

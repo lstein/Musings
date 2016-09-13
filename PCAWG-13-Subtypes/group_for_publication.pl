@@ -39,7 +39,7 @@ my @clinical_fields = qw(
  tobacco_smoking_intensity
  alcohol_history
  alcohol_history_intensity
- donor_wgs_white_black_gray
+ donor_wgs_included_excluded
 );
 
 # output fields for pcawg_specimen.tsv
@@ -70,7 +70,7 @@ my @specimen_fields = qw(
     tcga_expert_re-review
     tumour_histological_comment
     specimen_donor_treatment_type
-    donor_wgs_white_black_gray
+    donor_wgs_included_excluded
 );
 
 my $url      = CONSOLIDATION_SPREADSHEET;
