@@ -130,8 +130,8 @@ sub emit_data {
 	# The barcode then corresponds to an ICGC submitter_donor_id. Horrible.
 	if ($pcawg->{$pcawg_id}{$sample_ids[0]}{dcc_project_code} =~ /US$/) {
 	    $tcga_donor_uuid = $pcawg->{$pcawg_id}{$sample_ids[0]}{submitter_donor_id}; # NOT the same as the submitter_id in the DCC dump
-	    @specimen_uuids  =  map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
-	    @sample_uuids    =  map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}} @sample_ids;
+	    @specimen_uuids  =  map {lc $_} map {$pcawg->{$pcawg_id}{$_}{'submitter_specimen_id'}} @sample_ids;
+	    @sample_uuids    =  map {lc $_} map {$pcawg->{$pcawg_id}{$_}{'submitter_sample_id'}} @sample_ids;
 	    
 	    $donor_id              = $tcga_donor->{$uuid2barcode->{donor}{$tcga_donor_uuid}};
 	    @submitter_specimen_id = map {$uuid2barcode->{specimen}{$_}} @specimen_uuids;
@@ -151,14 +151,14 @@ sub emit_data {
 
 	unless ($donor->{$donor_id}) {
 	    $MISSING{$donor_id}++;
-	    print $fh "# $pcawg_id\tMISSING FROM DCC\n";
-	    next;
+#	    print $fh "# $pcawg_id\tMISSING FROM DCC\n";
+#	    next;
 	}
 
 	unless (@specimen_id) {
 	    $MISSING{$donor_id}++;
-	    print $fh "# $pcawg_id\t MISSING SPECIMEN ID\n";
-	    next;
+#	    print $fh "# $pcawg_id\t MISSING SPECIMEN ID\n";
+#	    next;
 	}
 
 	# now we can FINALLY print out our data!

@@ -9,7 +9,7 @@ $fields =~ s/^\#\s+//;
 my @field_names = split "\t",$fields;
 
 my ($total,%donors,%specimens,%field_present,%field_informative,
-    %excluded_donors,%graylist_donors,%non_excluded_specimens,%library);
+    %excluded_donors,%graylist_donors,%non_excluded_specimens,%library,%samples,%non_excluded_samples);
 
 my $comments = create_comments();
 
@@ -24,12 +24,14 @@ while (<>) {
     $excluded_donors{$fields{icgc_donor_id}}++ if $fields{donor_wgs_included_excluded} eq 'Excluded';
     $graylist_donors{$fields{icgc_donor_id}}++ if $fields{donor_wgs_included_excluded} eq 'GrayList';
     $specimens      {$fields{icgc_specimen_id}}++;
+    $samples        {$fields{icgc_sample_id}}++;
 
     $library{$fields{specimen_library_strategy}}{$fields{donor_wgs_included_excluded}}++;
 
     next if $fields{donor_wgs_included_excluded} eq 'Excluded';
 
     $non_excluded_specimens{$fields{icgc_specimen_id}}++;
+    $non_excluded_samples  {$fields{icgc_sample_id}}++;
     for my $f (@field_names) {
 	$field_present{$f}++      if $fields{$f} =~ /\S/;
 	$field_informative{$f}++  if $fields{$f} =~ /\S/ && $fields{$f} !~ /unknown|not sure|don't know|not documented/i;
@@ -43,16 +45,21 @@ my $non_excluded    = $included_donors + keys %graylist_donors;
 my $specimens              = keys %specimens;
 my $non_excluded_specimens = keys %non_excluded_specimens;
 
+my $samples                = keys %samples;
+my $non_excluded_samples   = keys %non_excluded_samples;
+
 printf "TOTAL PCAWG DONORS:        %5d\n",scalar(keys %donors);
 printf "TOTAL INCLUDED DONORS:     %5d\n",$included_donors;
 printf "TOTAL GRAYLISTED DONORS:   %5d\n",scalar(keys %graylist_donors);
 printf "TOTAL EXCLUDED DONORS:     %5d\n",scalar(keys %excluded_donors);
-printf "TOTAL NON-EXCLUDED DONORS: %5d\n",$non_excluded;
-printf "\n";
+printf "TOTAL NON-EXCLUDED DONORS: %5d\n\n",$non_excluded;
+
 printf "TOTAL SPECIMENS:               %5d\n",$specimens;
-printf "TOTAL NON-EXCLUDED SPECIMENS:  %5d\n",$non_excluded_specimens;
-printf "TABLE ROWS (==specimens):      %5d\n",$total;
-printf "\n";
+printf "TOTAL NON-EXCLUDED SPECIMENS:  %5d\n\n",$non_excluded_specimens;
+
+printf "TOTAL SAMPLES                  %5d\n",$samples;
+printf "TOTAL NON-EXCLUDED SAMPLES     %5d\n",$non_excluded_samples;
+printf "TABLE ROWS (==samples)  :      %5d\n\n",$total;
 
 printf "LIBRARY STRATEGY SUMMARY:\n";
 printf "%7s   %10s  %10s\n",'Library','List','Count';
@@ -67,13 +74,13 @@ printf "\n";
 printf("    %-38s %-15s %-17s %-17s\n",'FIELD','PRESENT (%)','INFORMATIVE (%)','COMMENT');
 my $counter = 1;
 for my $f (@field_names) {
-    my $present_pct     = $field_present{$f}/$non_excluded_specimens*100;
-    my $informative_pct = $field_informative{$f}/$non_excluded_specimens*100;
+    my $present_pct     = $field_present{$f}/$non_excluded_samples*100;
+    my $informative_pct = $field_informative{$f}/$non_excluded_samples*100;
     my $comment         = $comments->{$f};
     printf("%2d. %-36s %6d (%5.1f%%) %6d (%5.1f%%)     %-50s\n",$counter++,$f,$field_present{$f},$present_pct,$field_informative{$f},$informative_pct,$comment);
 }
 
-print "(Denominator is non-excluded specimens)\n";
+print "(Denominator is non-excluded samples)\n";
 
 exit 0;
 
