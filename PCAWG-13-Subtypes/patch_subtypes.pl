@@ -37,6 +37,7 @@ while (<>) {
                tumour_histological_code)} = @$patch;
 	$fields{tumour_histological_comment} .= 'WARNING: Tumour histology inferred from project name. Not known to be confirmed by path review.';
     } else {
+	warn "excluding $fields{icgc_specimen_id}" unless $fields{donor_wgs_included_excluded} eq 'Excluded';
 	$fields{donor_wgs_included_excluded} = 'Excluded';
     }
 
@@ -51,6 +52,6 @@ __DATA__
 BRCA-UK	BREAST	Breast-AdenoCA	ECTODERM	Breast	Adenocarcinoma	Infiltrating duct carcinoma	'8500/3	Infiltrating duct carcinoma, NOS
 BRCA-EU	BREAST	Breast-AdenoCA	ECTODERM	Breast	Adenocarcinoma	Infiltrating duct carcinoma	'8500/3	Infiltrating duct carcinoma, NOS
 BRCA-US	BREAST	Breast-AdenoCA	ECTODERM	Breast	Adenocarcinoma	Infiltrating duct carcinoma	'8500/3	Infiltrating duct carcinoma, NOS
-SARC-US	BONES & SOFT TISSUE	Bone-Leiomyo	MESODERM	Bone/SoftTissue	Sarcoma, soft tissue	Leiomyosarcoma	'8890/3	Leiomyosarcoma, NOS
+SARC-US	BONE & SOFT TISSUE	Bone-Leiomyo	MESODERM	Bone/SoftTissue	Sarcoma, soft tissue	Leiomyosarcoma	'8890/3	Leiomyosarcoma, NOS
 PACA-CA	PANCREAS	Panc-AdenoCA	ENDODERM	Pancreas	Adenocarcinoma	Adenocarcinoma	'8140/3	Adenocarcinoma, NOS
 PAEN-IT	PANCREAS	Panc-Endocrine	ENDODERM	Pancreas	Neuroendocrine tumor	Neoroendocrine carcinoma	'8246/3	Neuroendocrine carcinoma
